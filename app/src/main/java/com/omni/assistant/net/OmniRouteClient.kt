@@ -1,4 +1,5 @@
 package com.omni.assistant.net
+import kotlinx.coroutines.channels.awaitClose
 
 import com.omni.assistant.data.SettingsStore
 import kotlinx.coroutines.Dispatchers
