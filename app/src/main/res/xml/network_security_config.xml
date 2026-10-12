@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext (http://) is allowed because OmniRoute and the coding-agent bridge are
+  typically run on localhost or a home/LAN network without TLS. The app shows a
+  warning whenever a non-HTTPS URL points at a non-loopback host. Prefer HTTPS
+  (or a VPN such as Tailscale) for anything that leaves your own network.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

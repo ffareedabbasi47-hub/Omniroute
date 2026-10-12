@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+local.properties
+build/
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+*.jks
+*.keystore
+*.apk
+*.aab
+.env
+agent-bridge/config.json
+agent-bridge/__pycache__/
+agent-bridge/.bridge-token
