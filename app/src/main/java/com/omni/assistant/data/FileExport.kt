@@ -186,29 +186,50 @@ object FileExport {
         val activeFile: LiveFileInfo?,
         val completedFiles: List<LiveFileInfo>,
         val thinking: String?,
+        val cleanText: String,
         val stageSummary: String
     )
 
+    data class ThinkingSplit(
+        val thinking: String?,
+        val cleanText: String
+    )
+
+    /**
+     * Splits raw LLM response into thinking content and the clean user-facing response.
+     * Supports <thinking>...</thinking> as well as unclosed <thinking> while streaming.
+     */
+    fun splitThinking(markdown: String): ThinkingSplit {
+        if (!markdown.contains("<thinking>")) {
+            return ThinkingSplit(null, markdown)
+        }
+        val start = markdown.indexOf("<thinking>")
+        val end = markdown.indexOf("</thinking>")
+        return if (end != -1) {
+            val thinking = markdown.substring(start + 10, end).trim()
+            val before = markdown.substring(0, start)
+            val after = markdown.substring(end + 11)
+            val clean = (before + after).trimStart('\r', '\n')
+            ThinkingSplit(thinking.ifBlank { null }, clean)
+        } else {
+            val thinking = markdown.substring(start + 10).trim()
+            val clean = markdown.substring(0, start).trimStart('\r', '\n')
+            ThinkingSplit(thinking.ifBlank { null }, clean)
+        }
+    }
+
     /** Extracts live progress from streamed markdown in real-time. */
     fun parseStreamingProgress(markdown: String): StreamingLiveState {
-        val lines = markdown.lines()
+        val split = splitThinking(markdown)
+        val thinkingText = split.thinking
+        val cleanMarkdown = split.cleanText
+        val lines = cleanMarkdown.lines()
         val completed = mutableListOf<LiveFileInfo>()
         var inBlock = false
         var currentLang = ""
         var currentFileName: String? = null
         var currentLineCount = 0
         var lastTextBefore = ""
-
-        var thinkingText: String? = null
-        if (markdown.contains("<thinking>")) {
-            val start = markdown.indexOf("<thinking>") + 10
-            val end = markdown.indexOf("</thinking>")
-            thinkingText = if (end != -1) {
-                markdown.substring(start, end).trim()
-            } else {
-                markdown.substring(start).trim()
-            }
-        }
 
         for (line in lines) {
             val trimmed = line.trimStart()
@@ -265,6 +286,7 @@ object FileExport {
             }
             completed.isNotEmpty() -> "📦 Packaging ${completed.size} project files & preparing ZIP..."
             thinkingText != null -> "🧠 Thinking & planning project architecture..."
+            cleanMarkdown.isBlank() -> "🧠 Analyzing prompt & planning..."
             lines.size < 5 -> "🧠 Analyzing prompt & planning..."
             else -> "⚡ Generating response & instructions..."
         }
@@ -273,6 +295,7 @@ object FileExport {
             activeFile = activeFile,
             completedFiles = completed,
             thinking = thinkingText,
+            cleanText = cleanMarkdown,
             stageSummary = stage
         )
     }

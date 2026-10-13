@@ -62,7 +62,7 @@ class AttachmentStore(context: Context) {
                 try {
                     importImage(uri, name)
                 } catch (_: Exception) {
-                    importFile(uri, name, mime, isPdf = false)
+                    importRawImage(uri, name, mime)
                 }
             }
             "video" -> importVideo(uri, name, size)
@@ -207,9 +207,37 @@ class AttachmentStore(context: Context) {
             file.delete()
             throw AttachException("Couldn't read \"$name\".")
         }
-        val storedMime = if (isPdf) "application/pdf" else mime.ifBlank { "text/plain" }
+        val isImage = AttachmentRules.isImage(name, mime)
+        val storedMime = when {
+            isPdf -> "application/pdf"
+            isImage -> if (mime.startsWith("image/")) mime else "image/jpeg"
+            else -> mime.ifBlank { "text/plain" }
+        }
+        val storedKind = if (isImage) "image" else "file"
         val note = if (isPdf) "PDF is sent as a document; not every model accepts this" else null
-        return DraftAttachment(id, "file", name, storedMime, file.path, null, file.length(), note)
+        return DraftAttachment(id, storedKind, name, storedMime, file.path, if (isImage) file.path else null, file.length(), note)
+    }
+
+    private fun importRawImage(uri: Uri, name: String, mime: String): DraftAttachment {
+        val id = UUID.randomUUID().toString()
+        val ext = name.substringAfterLast('.', "jpg").lowercase().filter { it.isLetterOrDigit() }.ifEmpty { "jpg" }
+        val file = File(root, "$id.$ext")
+        try {
+            val input = ctx.contentResolver.openInputStream(uri) ?: throw AttachException("Couldn't open \"$name\".")
+            input.use { src ->
+                FileOutputStream(file).use { out ->
+                    src.copyTo(out)
+                }
+            }
+        } catch (e: AttachException) {
+            file.delete()
+            throw e
+        } catch (e: IOException) {
+            file.delete()
+            throw AttachException("Couldn't read \"$name\".")
+        }
+        val storedMime = if (mime.startsWith("image/")) mime else "image/jpeg"
+        return DraftAttachment(id, "image", name, storedMime, file.path, file.path, file.length(), null)
     }
 
     private fun rotateByExif(uri: Uri, bmp: Bitmap): Bitmap {
@@ -217,7 +245,7 @@ class AttachmentStore(context: Context) {
             ctx.contentResolver.openInputStream(uri)?.use {
                 ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
             } ?: ExifInterface.ORIENTATION_NORMAL
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             ExifInterface.ORIENTATION_NORMAL
         }
         val m = Matrix()
@@ -229,7 +257,11 @@ class AttachmentStore(context: Context) {
             ExifInterface.ORIENTATION_FLIP_VERTICAL -> m.postScale(1f, -1f)
             else -> return bmp
         }
-        return Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+        return try {
+            Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+        } catch (_: Throwable) {
+            bmp
+        }
     }
 
     private fun flattenOnWhite(bmp: Bitmap): Bitmap {
@@ -291,8 +323,17 @@ class AttachmentStore(context: Context) {
         if (!includeBinary) {
             return@withContext ApiContribution("[Earlier attachment: ${a.name} (not re-sent)]", emptyList())
         }
+        val isImage = a.kind == "image" || AttachmentRules.isImage(a.name, a.mime)
+        if (isImage) {
+            val imgMime = if (a.mime.startsWith("image/")) a.mime else "image/jpeg"
+            val file = File(a.path)
+            return@withContext if (file.exists() && file.length() > 0) {
+                ApiContribution("", listOf(ApiPart.Image(dataUrl(imgMime, file))))
+            } else {
+                ApiContribution("[Image attachment ${a.name} is missing or empty]", emptyList())
+            }
+        }
         when (a.kind) {
-            "image" -> ApiContribution("", listOf(ApiPart.Image(dataUrl("image/jpeg", File(a.path)))))
             "video" -> {
                 val frames = framePaths(a.path)
                 ApiContribution(
@@ -304,14 +345,21 @@ class AttachmentStore(context: Context) {
                 if (a.mime == "application/pdf") {
                     ApiContribution("", listOf(ApiPart.Document(a.name, dataUrl("application/pdf", File(a.path)))))
                 } else {
-                    var text = File(a.path).readText(Charsets.UTF_8)
-                    var truncated = false
-                    if (text.length > AttachmentRules.MAX_TEXT_CHARS) {
-                        text = text.take(AttachmentRules.MAX_TEXT_CHARS)
-                        truncated = true
+                    val file = File(a.path)
+                    val bytes = if (file.exists()) file.readBytes() else ByteArray(0)
+                    val isBinary = bytes.take(1024).any { it == 0.toByte() }
+                    if (isBinary) {
+                        ApiContribution("[Binary file: ${a.name} (${bytes.size} bytes)]", emptyList())
+                    } else {
+                        var text = String(bytes, Charsets.UTF_8)
+                        var truncated = false
+                        if (text.length > AttachmentRules.MAX_TEXT_CHARS) {
+                            text = text.take(AttachmentRules.MAX_TEXT_CHARS)
+                            truncated = true
+                        }
+                        val tail = if (truncated) "\n[...truncated to ${AttachmentRules.MAX_TEXT_CHARS} characters]" else ""
+                        ApiContribution("[File: ${a.name}]\n```\n$text\n```$tail", emptyList())
                     }
-                    val tail = if (truncated) "\n[...truncated to ${AttachmentRules.MAX_TEXT_CHARS} characters]" else ""
-                    ApiContribution("[File: ${a.name}]\n```\n$text\n```$tail", emptyList())
                 }
             }
         }

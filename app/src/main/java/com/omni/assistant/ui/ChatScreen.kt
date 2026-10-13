@@ -937,13 +937,14 @@ private fun StreamingBubble(
                 if (status != null) {
                     LiveClaudeStageCard(status, activeFile, completedFiles, thinking)
                 }
-                if (partial.isNotEmpty()) {
-                    val lines = remember(partial) { partial.lines() }
-                    val displayPartial = remember(partial) {
+                val cleanStream = remember(partial) { FileExport.splitThinking(partial).cleanText }
+                if (cleanStream.isNotEmpty()) {
+                    val lines = remember(cleanStream) { cleanStream.lines() }
+                    val displayPartial = remember(cleanStream) {
                         if (lines.size > 60) {
                             "… [Buffered ${lines.size - 45} lines above] …\n\n" + lines.takeLast(45).joinToString("\n")
                         } else {
-                            partial
+                            cleanStream
                         }
                     }
                     MarkdownView(displayPartial)
@@ -1008,8 +1009,12 @@ private fun MessageBubble(
     val ex = LocalOmni.current
     val clipboard = LocalClipboardManager.current
     var exportMenu by remember { mutableStateOf(false) }
-    val codeFiles = remember(m.content) {
-        try { FileExport.extractCodeFiles(m.content) } catch (_: Exception) { emptyList() }
+    val (msgThinking, msgCleanContent) = remember(m.content) {
+        FileExport.splitThinking(m.content)
+    }
+    var showThinking by remember { mutableStateOf(false) }
+    val codeFiles = remember(msgCleanContent) {
+        try { FileExport.extractCodeFiles(msgCleanContent) } catch (_: Exception) { emptyList() }
     }
     val playableHtml = remember(codeFiles) {
         try { FileExport.findPlayableHtml(codeFiles) } catch (_: Exception) { null }
@@ -1049,6 +1054,46 @@ private fun MessageBubble(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
                     .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
+                if (!msgThinking.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .clickable { showThinking = !showThinking }
+                    ) {
+                        Column(Modifier.padding(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "🧠 Thought process ${if (showThinking) "(tap to hide)" else "(tap to view)"}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    if (showThinking) "▲" else "▼",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (showThinking) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = msgThinking,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (codeFiles.isNotEmpty()) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -1090,9 +1135,9 @@ private fun MessageBubble(
                     }
                 }
 
-                if (m.content.isNotEmpty()) {
+                if (msgCleanContent.isNotEmpty()) {
                     MarkdownView(
-                        text = m.content,
+                        text = msgCleanContent,
                         onSaveCode = onSaveCode,
                         onRunHtml = onRunHtml
                     )
@@ -1166,7 +1211,7 @@ private fun MessageBubble(
             }
             if (!m.failed) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { clipboard.setText(AnnotatedString(m.content)) }) {
+                    IconButton(onClick = { clipboard.setText(AnnotatedString(msgCleanContent)) }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy reply", modifier = Modifier.size(20.dp))
                     }
                     if (attachments.isNotEmpty()) {

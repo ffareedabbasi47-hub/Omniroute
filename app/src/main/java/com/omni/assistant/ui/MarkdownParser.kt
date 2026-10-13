@@ -11,7 +11,8 @@ object MarkdownParser {
 
     fun parse(markdown: String): List<MdBlock> {
         return try {
-            val lines = markdown.lines()
+            val cleanMarkdown = com.omni.assistant.data.FileExport.splitThinking(markdown).cleanText
+            val lines = cleanMarkdown.lines()
             val blocks = mutableListOf<MdBlock>()
             var i = 0
 

@@ -24,9 +24,9 @@ data class Settings(
     /** Sent as the first "system" message of every chat. */
     val systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
     /** Model ids for image/video generation (may differ from the chat model). */
-    val imageModel: String = "",
+    val imageModel: String = "flux",
     val imageSize: String = "1024x1024",
-    val videoModel: String = "",
+    val videoModel: String = "antigravity-video",
     val videoSeconds: Int = 5
 ) {
     val apiConfigured: Boolean get() = baseUrl.isNotBlank() && model.isNotBlank()

@@ -168,19 +168,15 @@ class OmniRouteClient(private val settings: SettingsStore) {
     /** POST /images/generations. Returns the generated items (inline base64 or URLs). */
     suspend fun requestImages(prompt: String): List<MediaItem> {
         val s = settings.current
-        if (s.imageModel.isBlank()) {
-            throw ApiException(ApiException.Kind.NOT_CONFIGURED, "No image model set. Choose one in Settings > Image & video generation.")
-        }
-        return postMedia("/images/generations", MediaApi.buildImageRequest(s.imageModel, prompt, s.imageSize), 240)
+        val model = s.imageModel.ifBlank { "flux" }
+        return postMedia("/images/generations", MediaApi.buildImageRequest(model, prompt, s.imageSize), 240)
     }
 
     /** POST /videos/generations. The response format is not documented upstream; see [MediaApi]. */
     suspend fun requestVideo(prompt: String): List<MediaItem> {
         val s = settings.current
-        if (s.videoModel.isBlank()) {
-            throw ApiException(ApiException.Kind.NOT_CONFIGURED, "No video model set. Choose one in Settings > Image & video generation.")
-        }
-        return postMedia("/videos/generations", MediaApi.buildVideoRequest(s.videoModel, prompt, s.videoSeconds), 900)
+        val model = s.videoModel.ifBlank { "antigravity-video" }
+        return postMedia("/videos/generations", MediaApi.buildVideoRequest(model, prompt, s.videoSeconds), 900)
     }
 
     private suspend fun postMedia(path: String, payload: String, timeoutSec: Long): List<MediaItem> =

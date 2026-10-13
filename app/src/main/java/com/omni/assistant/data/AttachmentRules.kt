@@ -13,15 +13,15 @@ object AttachmentRules {
     /** How many most-recent attachment-bearing user messages are re-sent in full on each request. */
     const val RESEND_LAST_N_MESSAGES = 2
 
-    private val imageExtensions = setOf(
+    val imageExtensions = setOf(
         "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "svg", "ico", "tiff"
     )
 
-    private val videoExtensions = setOf(
+    val videoExtensions = setOf(
         "mp4", "mkv", "webm", "avi", "mov", "3gp", "flv", "wmv", "m4v"
     )
 
-    private val textExtensions = setOf(
+    val textExtensions = setOf(
         "txt", "md", "markdown", "json", "csv", "tsv", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf",
         "log", "html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "kt", "kts", "java", "py", "rb", "go",
         "rs", "c", "h", "cpp", "hpp", "cs", "swift", "php", "sh", "bash", "zsh", "sql", "gradle", "properties",
@@ -33,12 +33,18 @@ object AttachmentRules {
         "application/yaml", "application/sql", "application/x-sh", "application/toml"
     )
 
+    fun isImage(name: String, mime: String): Boolean {
+        val m = mime.lowercase()
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return m.startsWith("image/") || ext in imageExtensions
+    }
+
     /** Returns "image", "video", "pdf", "text", or null if the type is not supported. */
     fun classify(name: String, mime: String): String? {
         val m = mime.lowercase()
         val ext = name.substringAfterLast('.', "").lowercase()
         return when {
-            m.startsWith("image/") || ext in imageExtensions -> "image"
+            isImage(name, mime) -> "image"
             m.startsWith("video/") || ext in videoExtensions -> "video"
             m == "application/pdf" || ext == "pdf" -> "pdf"
             m.startsWith("text/") || m in textMimes || ext in textExtensions -> "text"

@@ -19,9 +19,10 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun MarkdownView(content: String) {
+    val clean = com.omni.assistant.data.FileExport.splitThinking(content).cleanText
     SelectionContainer {
         Text(
-            text = parseMarkdown(content),
+            text = parseMarkdown(clean),
             style = MaterialTheme.typography.bodyLarge
         )
     }

@@ -54,4 +54,29 @@ class AttachmentRulesTest {
         assertEquals("file", content.getJSONObject(2).getString("type"))
         assertEquals("hi", msgs.getJSONObject(1).getString("content"))
     }
+
+    @Test fun isImageDetectsProperly() {
+        assertTrue(AttachmentRules.isImage("capture_123.jpg", "image/jpeg"))
+        assertTrue(AttachmentRules.isImage("photo.png", "application/octet-stream"))
+        assertTrue(AttachmentRules.isImage("file.bin", "image/webp"))
+        org.junit.Assert.assertFalse(AttachmentRules.isImage("doc.pdf", "application/pdf"))
+        org.junit.Assert.assertFalse(AttachmentRules.isImage("main.kt", "text/plain"))
+    }
+
+    @Test fun splitThinkingRemovesTagsAndPreservesThought() {
+        val raw = "<thinking>\nInternal AI plan\n</thinking>\nHello user, here is your answer."
+        val result = com.omni.assistant.data.FileExport.splitThinking(raw)
+        assertEquals("Internal AI plan", result.thinking)
+        assertEquals("Hello user, here is your answer.", result.cleanText)
+
+        val unclosed = "<thinking>\nStill planning..."
+        val unclosedResult = com.omni.assistant.data.FileExport.splitThinking(unclosed)
+        assertEquals("Still planning...", unclosedResult.thinking)
+        assertEquals("", unclosedResult.cleanText)
+
+        val noThinking = "Plain message without any tags"
+        val noThinkingResult = com.omni.assistant.data.FileExport.splitThinking(noThinking)
+        assertNull(noThinkingResult.thinking)
+        assertEquals("Plain message without any tags", noThinkingResult.cleanText)
+    }
 }

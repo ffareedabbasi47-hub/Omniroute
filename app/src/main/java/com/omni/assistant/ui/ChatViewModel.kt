@@ -466,7 +466,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         map + (cid to ConversationTask(
                             cid = cid,
                             streaming = true,
-                            partial = currentText,
+                            partial = progress.cleanText,
                             status = progress.stageSummary,
                             activeFile = progress.activeFile,
                             completedFiles = progress.completedFiles,
@@ -475,7 +475,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
-            val finalText = sb.toString()
+            val rawFinal = sb.toString()
+            val (_, cleanFinal) = FileExport.splitThinking(rawFinal)
+            val finalText = cleanFinal.ifBlank { rawFinal }
             val now = System.currentTimeMillis()
             dao.insertMessage(MessageEntity(conversationId = cid, role = "assistant", content = finalText, createdAt = now))
             dao.touch(cid, now)
@@ -484,9 +486,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
                 if (sb.isNotBlank()) {
+                    val rawCancelled = sb.toString()
+                    val (_, cleanCancelled) = FileExport.splitThinking(rawCancelled)
+                    val saved = cleanCancelled.ifBlank { rawCancelled }
                     val now = System.currentTimeMillis()
                     dao.insertMessage(
-                        MessageEntity(conversationId = cid, role = "assistant", content = sb.toString(), createdAt = now)
+                        MessageEntity(conversationId = cid, role = "assistant", content = saved, createdAt = now)
                     )
                     dao.touch(cid, now)
                 }
