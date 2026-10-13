@@ -388,10 +388,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             val (_, cleanFinal) = FileExport.splitThinking(rawFinal)
             val finalText = cleanFinal.ifBlank { rawFinal }
             val now = System.currentTimeMillis()
-            val mid = dao.insertMessage(MessageEntity(conversationId = cid, role = "assistant", content = finalText, createdAt = now))
+            dao.insertMessage(MessageEntity(conversationId = cid, role = "assistant", content = finalText, createdAt = now))
             dao.touch(cid, now)
             omni.connection.markOk()
-            postProcessReply(cid, mid, finalText)
             if (omni.settings.current.speakReplies) speak(finalText)
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
@@ -414,50 +413,6 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         } finally {
             runningJobs.remove(cid)
             activeTasks.update { it - cid }
-        }
-    }
-
-    private suspend fun postProcessReply(cid: Long, mid: Long, text: String) {
-        val hasSvg = text.contains("<svg", ignoreCase = true) || text.contains("image.svg", ignoreCase = true)
-        val lastUserMsg = dao.getMessages(cid).lastOrNull { it.role == "user" }?.content.orEmpty()
-        val userAskedImage = Regex("""\b(photo|ohoto|image|picture|tasveer|pic|screenshot|wallpaper)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lastUserMsg)
-
-        if (hasSvg || (userAskedImage && !text.contains("http://") && !text.contains("file://"))) {
-            val cleaned = text.replace(Regex("""```(xml|svg|html)?:?image\.svg?[\s\S]*?```""", RegexOption.IGNORE_CASE), "")
-                .replace(Regex("""<svg[\s\S]*?</svg>""", RegexOption.IGNORE_CASE), "")
-                .trim()
-            val prompt = lastUserMsg.ifBlank { "creative visual art" }
-            try {
-                val items = omni.client.requestImages(prompt)
-                if (items.isNotEmpty()) {
-                    val item = items[0]
-                    val tmp = store.newGeneratedFile("bin")
-                    val type = omni.client.saveItem(item, tmp, 40L * 1024 * 1024)
-                    if (type != null) {
-                        val dest = java.io.File(tmp.parentFile, tmp.nameWithoutExtension + "." + type.ext)
-                        if (tmp.renameTo(dest)) {
-                            val draft = store.registerGenerated(dest, "image", "generated_photo.${type.ext}", type.mime)
-                            dao.insertAttachments(listOf(
-                                AttachmentEntity(
-                                    messageId = mid, kind = draft.kind, name = draft.name, mime = draft.mime,
-                                    path = draft.path, thumbPath = draft.thumbPath, sizeBytes = draft.sizeBytes
-                                )
-                            ))
-                        } else {
-                            tmp.delete()
-                        }
-                    } else {
-                        tmp.delete()
-                    }
-                }
-            } catch (e: Exception) {
-            }
-            val displayNotice = if (cleaned.isNotEmpty()) {
-                "$cleaned\n\n🖼️ **Photo Generated & Ready:**"
-            } else {
-                "🖼️ **Photo Generated & Ready:**"
-            }
-            dao.updateMessageContent(mid, displayNotice)
         }
     }
 
