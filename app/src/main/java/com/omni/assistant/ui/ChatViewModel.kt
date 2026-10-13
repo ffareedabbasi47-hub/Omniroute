@@ -424,21 +424,35 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun extractLiveStatus(text: String): String {
-        val lastLines = text.takeLast(1000).lines().filter { it.isNotBlank() }
+        if (text.isBlank()) return "🧠 Thinking & planning project..."
+        val lastLines = text.takeLast(1500).lines().filter { it.isNotBlank() }
         for (line in lastLines.reversed()) {
             val l = line.trim()
             when {
-                l.contains("index.html", ignoreCase = true) -> return "🌐 Building index.html..."
-                l.contains("script.js", ignoreCase = true) || l.contains("game.js", ignoreCase = true) -> return "⚡ Writing game logic..."
-                l.contains("style.css", ignoreCase = true) -> return "🎨 Styling app (style.css)..."
+                l.contains("index.html", ignoreCase = true) -> return "🌐 Building HTML structure (index.html)..."
+                l.contains("game.js", ignoreCase = true) || l.contains("script.js", ignoreCase = true) -> return "⚡ Writing interactive game logic..."
+                l.contains("style.css", ignoreCase = true) -> return "🎨 Styling & animations (style.css)..."
                 l.contains("```html", ignoreCase = true) -> return "📄 Creating HTML structure..."
-                l.contains("```", ignoreCase = true) -> return "✏️ Writing code..."
-                l.contains("thinking", ignoreCase = true) || l.startsWith("<thinking>") -> return "🧠 Thinking..."
-                l.contains("creating", ignoreCase = true) -> return "📁 Creating files..."
-                l.contains("editing", ignoreCase = true) -> return "✏️ Editing files..."
+                l.contains("```javascript", ignoreCase = true) || l.contains("```js", ignoreCase = true) -> return "⚡ Writing JavaScript code..."
+                l.contains("```css", ignoreCase = true) -> return "🎨 Applying CSS styles & layout..."
+                l.contains("```kotlin", ignoreCase = true) || l.contains("```kt", ignoreCase = true) -> return "📱 Writing Kotlin code..."
+                l.contains("```python", ignoreCase = true) || l.contains("```py", ignoreCase = true) -> return "🐍 Writing Python code..."
+                l.contains("```", ignoreCase = true) -> return "✏️ Writing code files..."
+                l.contains("audio", ignoreCase = true) || l.contains("sound", ignoreCase = true) -> return "🔊 Adding sound effects & audio..."
+                l.contains("canvas", ignoreCase = true) -> return "🎮 Drawing game canvas & visuals..."
+                l.contains("animation", ignoreCase = true) -> return "✨ Adding animations..."
+                l.contains("touch", ignoreCase = true) || l.contains("click", ignoreCase = true) -> return "👆 Setting up touch controls..."
+                l.contains("saving", ignoreCase = true) || l.contains("saved", ignoreCase = true) -> return "📁 Saving files to device..."
+                l.contains("thinking", ignoreCase = true) || l.startsWith("<thinking>") -> return "🧠 Analyzing architecture..."
             }
         }
-        return if (text.isBlank()) "🧠 Thinking & planning..." else "✏️ Writing files..."
+        val lineCount = text.lines().size
+        return when {
+            lineCount < 6 -> "🧠 Analyzing request & planning..."
+            lineCount < 20 -> "📋 Structuring files & logic..."
+            lineCount < 60 -> "✏️ Writing code & components..."
+            else -> "⚡ Finalizing project files..."
+        }
     }
 
     private suspend fun fail(cid: Long, partial: String, e: ApiException, hadAttachments: Boolean) {

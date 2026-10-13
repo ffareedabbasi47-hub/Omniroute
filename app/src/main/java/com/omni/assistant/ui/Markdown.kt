@@ -91,8 +91,13 @@ private fun HeadingBlock(level: Int, text: String) {
 
 @Composable
 private fun ParagraphBlock(text: String) {
+    val lines = remember(text) { text.lines() }
+    val safeText = remember(text) {
+        if (lines.size > 200) lines.take(150).joinToString("\n") + "\n..."
+        else text
+    }
     Text(
-        text = formatInlineMarkdown(text),
+        text = formatInlineMarkdown(safeText),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurface
     )
@@ -152,12 +157,13 @@ private fun CodeBlock(
 
     var expanded by remember { mutableStateOf(false) }
     val lines = remember(content) { content.lines() }
-    val isHuge = lines.size > 150
+    val isHuge = lines.size > 100
     val displayContent = remember(content, expanded) {
         if (isHuge && !expanded) {
-            lines.take(120).joinToString("\n")
+            lines.take(80).joinToString("\n")
         } else {
-            content
+            if (lines.size > 400) lines.take(400).joinToString("\n") + "\n\n... (Tap 'Save' or 'Download ZIP' for full code)"
+            else content
         }
     }
 
@@ -289,7 +295,7 @@ private fun CodeBlock(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (expanded) "▲ Collapse code" else "▼ Showing 120 of ${lines.size} lines • Tap to expand (or Save File)",
+                        text = if (expanded) "▲ Collapse code" else "▼ Showing 80 of ${lines.size} lines • Tap to expand (or Save File)",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
@@ -301,42 +307,50 @@ private fun CodeBlock(
 }
 
 private fun formatInlineMarkdown(text: String): AnnotatedString {
-    if (text.length > 20000) {
+    if (text.length > 10000) {
         return AnnotatedString(text)
     }
-    return buildAnnotatedString {
-        val regex = Regex("(`[^`]+`)|(\\*\\*[^*]+\\*\\*)")
-        var lastIdx = 0
-        for (m in regex.findAll(text)) {
-            val range = m.range
-            if (range.first > lastIdx) {
-                append(text.substring(lastIdx, range.first))
+    return try {
+        buildAnnotatedString {
+            val regex = Regex("(`[^`]+`)|(\\*\\*[^*]+\\*\\*)")
+            var lastIdx = 0
+            for (m in regex.findAll(text)) {
+                val range = m.range
+                if (range.first > lastIdx && range.first <= text.length) {
+                    append(text.substring(lastIdx, range.first))
+                }
+                val matchStr = m.value
+                if (matchStr.startsWith("`") && matchStr.endsWith("`") && matchStr.length > 2) {
+                    val code = matchStr.substring(1, matchStr.length - 1)
+                    val start = length
+                    append(code)
+                    if (length >= start) {
+                        addStyle(
+                            SpanStyle(
+                                fontFamily = FontFamily.Monospace,
+                                background = Color(0x33888888)
+                            ),
+                            start,
+                            length
+                        )
+                    }
+                } else if (matchStr.startsWith("**") && matchStr.endsWith("**") && matchStr.length > 4) {
+                    val bold = matchStr.substring(2, matchStr.length - 2)
+                    val start = length
+                    append(bold)
+                    if (length >= start) {
+                        addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, length)
+                    }
+                } else {
+                    append(matchStr)
+                }
+                lastIdx = range.last + 1
             }
-            val matchStr = m.value
-            if (matchStr.startsWith("`") && matchStr.endsWith("`") && matchStr.length > 2) {
-                val code = matchStr.substring(1, matchStr.length - 1)
-                val start = length
-                append(code)
-                addStyle(
-                    SpanStyle(
-                        fontFamily = FontFamily.Monospace,
-                        background = Color(0x33888888)
-                    ),
-                    start,
-                    length
-                )
-            } else if (matchStr.startsWith("**") && matchStr.endsWith("**") && matchStr.length > 4) {
-                val bold = matchStr.substring(2, matchStr.length - 2)
-                val start = length
-                append(bold)
-                addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, length)
-            } else {
-                append(matchStr)
+            if (lastIdx < text.length) {
+                append(text.substring(lastIdx))
             }
-            lastIdx = range.last + 1
         }
-        if (lastIdx < text.length) {
-            append(text.substring(lastIdx))
-        }
+    } catch (_: Exception) {
+        AnnotatedString(text)
     }
 }

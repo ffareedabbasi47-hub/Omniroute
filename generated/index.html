@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Talking Tom Cat 2 - Virtual Pet</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    body {
+      background: #1a1a2e;
+      font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #game-app {
+      width: 100%;
+      max-width: 480px;
+      height: 100vh;
+      max-height: 920px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #f0f4f8;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    
+    /* TOP STATUS HEADER */
+    .header-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 100%);
+      pointer-events: none;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: auto;
+    }
+    .level-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.25);
+      backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 20px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      border: 1px solid rgba(255,255,255,0.4);
+    }
+    .coins-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 193, 7, 0.3);
+      backdrop-filter: blur(8px);
+      padding: 5px 12px;
+      border-radius: 20px;
+      color: #ffeb3b;
+      font-weight: 800;
+      font-size: 14px;
+      border: 1px solid rgba(255, 235, 59, 0.6);
+      box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+    }
+    .stat-meters {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.88);
+      border-radius: 12px;
+      padding: 4px 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .stat-bar-bg {
+      flex: 1;
+      height: 7px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .stat-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    .fill-happy { background: linear-gradient(90deg, #ff6b6b, #ff8e53); }
+    .fill-hunger { background: linear-gradient(90deg, #f6d365, #fda085); }
+    .fill-hygiene { background: linear-gradient(90deg, #4facfe, #00f2fe); }
+    .fill-energy { background: linear-gradient(90deg, #43e97b, #38f9d7); }
+
+    /* ROOM BACKGROUNDS */
+    .room-stage {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 0.5s ease;
+    }
+    .room-living {
+      background: radial-gradient(circle at 50% 30%, #a8c0ff 0%, #3f2b96 100%);
+    }
+    .room-kitchen {
+      background: radial-gradient(circle at 50% 30%, #ffecd2 0%, #fcb69f 100%);
+    }
+    .room-bathroom {
+      background: radial-gradient(circle at 50% 30%, #b3ecff 0%, #439cfb 100%);
+    }
+    .room-bedroom {
+      background: radial-gradient(circle at 50% 30%, #3a1c71 0%, #0d0630 100%);
+    }
+    .room-bedroom.lights-off {
+      background: radial-gradient(circle at 50% 30%, #0a081f 0%, #03010b 100%);
+    }
+
+    /* SCENERY */
+    .scenery {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .scenery-living .window {
+      position: absolute;
+      top: 80px;
+      left: 30px;
+      width: 80px;
+      height: 110px;
+      background: #e0f2fe;
+      border: 4px solid #fff;
+      border-radius: 40px 40px 10px 10px;
+      box-shadow: inset 0 0 15px rgba(56, 189, 248, 0.4);
+      overflow: hidden;
+    }
+    .scenery-living .sun {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      width: 25px;
+      height: 25px;
+      background: #facc15;
+      border-radius: 50%;
+      box-shadow: 0 0 15px #fde047;
+    }
+    .scenery-living .plant {
+      position: absolute;
+      bottom: 120px;
+      right: 25px;
+      font-size: 42px;
+    }
+    .floor-board {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 140px;
+      background: linear-gradient(180deg, #d4a373 0%, #bc6c25 100%);
+      border-top: 5px solid #a2551a;
+    }
+    .carpet {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
+      height: 70px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, #ff80bf 0%, #e60067 100%);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+    }
+    .kitchen-shelf {
+      position: absolute;
+      bottom: 120px;
+      left: 20px;
+      right: 20px;
+      height: 12px;
+      background: #78350f;
+      border-radius: 6px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .shower-head {
+      position: absolute;
+      top: 85px;
+      right: 40px;
+      font-size: 50px;
+      transform: rotate(-30deg);
+      pointer-events: auto;
+      cursor: pointer;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    }
+    .water-spray {
+      position: absolute;
+      top: 140px;
+      right: 60px;
+      width: 60px;
+      height: 180px;
+      pointer-events: none;
+      display: none;
+      background: radial-gradient(ellipse at top, rgba(147, 197, 253, 0.6) 0%, rgba(147, 197, 253, 0) 80%);
+    }
+    .bed-frame {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      height: 110px;
+      background: #475569;
+      border-radius: 20px;
+      border-top: 10px solid #cbd5e1;
+      display: none;
+    }
+    .lamp-post {
+      position: absolute;
+      top: 90px;
+      left: 30px;
+      cursor: pointer;
+      pointer-events: auto;
+      text-align: center;
+    }
+    .lamp-glow {
+      position: absolute;
+      top: -20px;
+      left: -20px;
+      width: 80px;
+      height: 80px;
+      background: radial-gradient(circle, rgba(254, 240, 138, 0.7) 0%, rgba(254, 240, 138, 0) 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    /* TOM CAT CHARACTER */
+    #cat-character {
+      position: absolute;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 260px;
+      height: 380px;
+      z-index: 20;
+      touch-action: none;
+      transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .cat-svg {
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(0 12px 16px rgba(0,0,0,0.35));
+    }
+
+    /* ANIMATIONS */
+    @keyframes idleBreathing {
+      0%, 100% { transform: translateY(0) scaleY(1); }
+      50% { transform: translateY(-4px) scaleY(1.02); }
+    }
+    @keyframes tailWag {
+      0%, 100% { transform: rotate(-5deg); }
+      50% { transform: rotate(18deg); }
+    }
+    @keyframes earTwitch {
+      0%, 90%, 100% { transform: rotate(0deg); }
+      92% { transform: rotate(-8deg); }
+      96% { transform: rotate(6deg); }
+    }
+    @keyframes purrVibe {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(1.5px, -1px); }
+      75% { transform: translate(-1.5px, 1px); }
+    }
+    @keyframes dizzySpin {
+      0% { transform: rotate(0deg); }
+      25% { transform: rotate(8deg); }
+      75% { transform: rotate(-8deg); }
+      100% { transform: rotate(0deg); }
+    }
+
+    .anim-idle { animation: idleBreathing 3s ease-in-out infinite; }
+    .anim-purr { animation: purrVibe 0.08s linear infinite; }
+    .anim-dizzy { animation: dizzySpin 0.3s ease-in-out infinite; }
+    
+    .tail-part {
+      transform-origin: 160px 310px;
+      animation: tailWag 3.5s ease-in-out infinite;
+    }
+    .ear-left {
+      transform-origin: 65px 75px;
+      animation: earTwitch 5s ease-in-out infinite;
+    }
+    .ear-right {
+      transform-origin: 195px 75px;
+      animation: earTwitch 6s ease-in-out infinite reverse;
+    }
+
+    /* PARTICLES */
+    #fx-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 45;
+    }
+    .particle {
+      position: absolute;
+      pointer-events: none;
+      animation: particleFly 1s ease-out forwards;
+    }
+    @keyframes particleFly {
+      0% { opacity: 1; transform: translateY(0) scale(0.8); }
+      100% { opacity: 0; transform: translateY(-80px) scale(1.4); }
+    }
+    .bubble-item {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9) 0%, rgba(147, 197, 253, 0.4) 60%, rgba(59, 130, 246, 0.6) 100%);
+      border: 1px solid rgba(255,255,255,0.8);
+      box-shadow: inset 0 0 6px rgba(255,255,255,0.8);
+      pointer-events: auto;
+      cursor: pointer;
+      animation: bubbleFloat 3s ease-in-out infinite;
+    }
+    @keyframes bubbleFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    /* ACTION DOCKS */
+    .room-tools-dock {
+      position: absolute;
+      bottom: 82px;
+      left: 10px;
+      right: 10px;
+      z-index: 40;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .tool-btn {
+      pointer-events: auto;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(10px);
+      border: 2px solid #fff;
+      border-radius: 50px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 800;
+      font-size: 13px;
+      color: #1e293b;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .tool-btn:active {
+      transform: scale(0.92);
+    }
+
+    /* BOTTOM NAV */
+    .bottom-nav {
+      height: 76px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(16px);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 0 10px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+      z-index: 50;
+    }
+    .nav-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 16px;
+      transition: all 0.2s ease;
+    }
+    .nav-tab .tab-icon {
+      font-size: 24px;
+      transition: transform 0.2s ease;
+    }
+    .nav-tab.active {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+    .nav-tab.active .tab-icon {
+      transform: translateY(-4px) scale(1.15);
+    }
+
+    /* MODAL PANELS */
+    .modal-panel {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      padding: 24px 18px;
+      animation: modalFadeIn 0.25s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+      margin-bottom: 18px;
+    }
+    .modal-header h2 {
+      font-size: 20px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .close-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* WARDROBE */
+    .wardrobe-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      overflow-y: auto;
+      padding-bottom: 20px;
+    }
+    .wardrobe-card {
+      background: rgba(255,255,255,0.12);
+      border: 2px solid rgba(255,255,255,0.2);
+      border-radius: 16px;
+      padding: 14px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .wardrobe-card:active {
+      transform: scale(0.95);
+    }
+    .wardrobe-card.equipped {
+      border-color: #22c55e;
+      background: rgba(34, 197, 94, 0.25);
+    }
+    .wardrobe-card .item-emoji { font-size: 38px; }
+    .wardrobe-card .item-name { font-size: 12px; font-weight: 700; }
+    .wardrobe-card .item-btn {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 800;
+      margin-top: 4px;
+      cursor: pointer;
+    }
+    .btn-buy { background: #facc15; color: #78350f; }
+    .btn-equip { background: #3b82f6; color: #fff; }
+    .btn-equipped { background: #22c55e; color: #fff; }
+
+    /* MINI GAME */
+    #mini-game-stage {
+      flex: 1;
+      background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%);
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    .game-score-bar {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+      z-index: 10;
+    }
+    .falling-target {
+      position: absolute;
+      font-size: 38px;
+      cursor: pointer;
+      user-select: none;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+      transform: translate(-50%, -50%);
+    }
+
+    /* SPEECH BUBBLE */
+    .speech-bubble {
+      position: absolute;
+      top: 85px;
+      left: 50%;
+      transform: translateX(-50%) scale(0);
+      background: #fff;
+      padding: 10px 18px;
+      border-radius: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 14px;
+      z-index: 30;
+      pointer-events: none;
+      white-space: nowrap;
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .speech-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 10px 8px 0;
+      border-style: solid;
+      border-color: #fff transparent;
+      display: block;
+      width: 0;
+    }
+    .speech-bubble.show {
+      transform: translateX(-50%) scale(1);
+    }
+
+    /* VOICE DOCK */
+    .voice-dock {
+      position: absolute;
+      top: 75px;
+      right: 14px;
+      z-index: 45;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .voice-btn {
+      background: rgba(255, 255, 255, 0.92);
+      border: 2px solid #fff;
+      border-radius: 30px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a;
+      transition: all 0.2s;
+    }
+    .voice-btn:active {
+      transform: scale(0.93);
+    }
+    .voice-btn.recording {
+      background: #ef4444;
+      color: #fff;
+      border-color: #f87171;
+      animation: pulseRecord 1s infinite alternate;
+    }
+    @keyframes pulseRecord {
+      from { box-shadow: 0 0 8px rgba(239,68,68,0.4); }
+      to { box-shadow: 0 0 20px rgba(239,68,68,0.9); }
+    }
+    
+    /* PHRASES DRAWER */
+    .phrases-drawer {
+      position: absolute;
+      top: 130px;
+      left: 14px;
+      right: 14px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 16px;
+      padding: 12px;
+      display: none;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      z-index: 55;
+    }
+    .phrases-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .phrase-chip {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #334155;
+      cursor: pointer;
+    }
+    .phrase-chip:active {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    /* TOAST */
+    .toast-msg {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      z-index: 120;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .toast-msg.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-app">
+  <div id="toast" class="toast-msg">Swagat hai Talking Tom me!</div>
+  <div id="cat-speech" class="speech-bubble">Mew mew! Main Tom hoon! 🐱</div>
+
+  <!-- HEADER -->
+  <header class="header-bar">
+    <div class="header-top">
+      <div class="level-badge">
+        <span>⭐ Level <span id="level-num">1</span></span>
+      </div>
+      <div class="coins-badge">
+        <span>🪙 <span id="coins-num">150</span> Coins</span>
+      </div>
+    </div>
+    <div class="stat-meters">
+      <div class="stat-card" title="Happiness">
+        <span>❤️</span>
+        <div class="stat-bar-bg">
+          <div id="bar-happy" class="stat-bar-fill fill-happy" style="width: 85%;"></div>
+        </div>
+      </div>
+      <div class="stat-card" title="Hunger">
+        <span>🍖</span>
+        <div class="stat-bar-bg">
+          <div id="bar-hunger" class="stat-bar-fill fill-hunger" style="width: 70%;"></div>
+        </div>
+      </div>
+      <div class="stat-card" title="Hygiene">
+        <span>🛁</span>
+        <div class="stat-bar-bg">
+          <div id="bar-hygiene" class="stat-bar-fill fill-hygiene" style="width: 60%;"></div>
+        </div>
+      </div>
+      <div class="stat-card" title="Energy">
+        <span>⚡</span>
+        <div class="stat-bar-bg">
+          <div id="bar-energy" class="stat-bar-fill fill-energy" style="width: 90%;"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- VOICE MIC & TALK BUTTONS -->
+  <div class="voice-dock">
+    <button id="btn-mic" class="voice-btn" title="Tom ko sunao">
+      <span id="mic-icon">🎙️</span>
+      <span id="mic-label">Tom se Bolo</span>
+    </button>
+    <button id="btn-phrases-toggle" class="voice-btn" title="Funny Dialogues">
+      <span>💬</span>
+      <span>Baatein</span>
+    </button>
+  </div>
+
+  <!-- FAST PHRASES DRAWER -->
+  <div id="phrases-drawer" class="phrases-drawer">
+    <div style="font-size:12px; font-weight:800; color:#64748b; margin-bottom:8px;">TOM SE BULVAO:</div>
+    <div class="phrases-list">
+      <span class="phrase-chip" data-text="Namaste dosto! Kaise ho aap?">Namaste Dosto! 🙏</span>
+      <span class="phrase-chip" data-text="Bhai mujhe bohot bhookh lagi hai, doodh do!">Bhookh lagi hai! 🥛</span>
+      <span class="phrase-chip" data-text="Hahahahaha! Gudgudi ho rahi hai mat karo!">Gudgudi ho rahi hai! 😂</span>
+      <span class="phrase-chip" data-text="Arey ouch! Mujhe mat maaro yaar!">Mat maaro! 😿</span>
+      <span class="phrase-chip" data-text="Main duniya ka sabse smart billa hoon!">Smart Billa 😎</span>
+      <span class="phrase-chip" data-text="Aao milkar ek mazedaar game khelte hain!">Game khelo 🎮</span>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:6px;">
+      <input id="custom-speech-input" type="text" placeholder="Apna message likho..." style="flex:1; padding:7px 12px; border-radius:14px; border:1px solid #cbd5e1; font-size:12px; outline:none;">
+      <button id="btn-speak-custom" style="background:#3b82f6; color:#fff; border:none; border-radius:14px; padding:0 14px; font-weight:700; font-size:12px; cursor:pointer;">Bolo</button>
+    </div>
+  </div>
+
+  <!-- ROOM STAGE -->
+  <main id="room-stage" class="room-stage room-living">
+    
+    <!-- LIVING ROOM -->
+    <div id="scenery-living" class="scenery scenery-living">
+      <div class="window"><div class="sun"></div></div>
+      <div class="plant">🪴</div>
+      <div class="floor-board"></div>
+      <div class="carpet"></div>
+    </div>
+
+    <!-- KITCHEN -->
+    <div id="scenery-kitchen" class="scenery scenery-kitchen" style="display:none;">
+      <div class="window" style="position:absolute; top:80px; left:40px; font-size:50px;">🪟</div>
+      <div style="position:absolute; top:85px; right:40px; font-size:45px;">🍳</div>
+      <div class="floor-board" style="background:linear-gradient(180deg, #fdba74 0%, #ea580c 100%);"></div>
+      <div class="kitchen-shelf"></div>
+    </div>
+
+    <!-- BATHROOM -->
+    <div id="scenery-bathroom" class="scenery scenery-bathroom" style="display:none;">
+      <div class="shower-head" id="shower-head-btn">🚿</div>
+      <div class="water-spray" id="water-spray"></div>
+      <div style="position:absolute; bottom:130px; left:30px; font-size:42px;">🧴</div>
+      <div class="floor-board" style="background:linear-gradient(180deg, #93c5fd 0%, #2563eb 100%);"></div>
+      <div class="carpet" style="background:radial-gradient(ellipse at center, #38bdf8 0%, #0284c7 100%);"></div>
+    </div>
+
+    <!-- BEDROOM -->
+    <div id="scenery-bedroom" class="scenery scenery-bedroom" style="display:none;">
+      <div class="lamp-post" id="lamp-btn">
+        <div class="lamp-glow" id="lamp-glow"></div>
+        <span style="font-size: 45px;">💡</span>
+      </div>
+      <div class="floor-board" style="background:linear-gradient(180deg, #334155 0%, #0f172a 100%);"></div>
+      <div class="bed-frame" id="bed-frame" style="display:block;"></div>
+    </div>
+
+    <!-- FX PARTICLES -->
+    <div id="fx-layer"></div>
+
+    <!-- TOM THE TALKING CAT (VECTOR CHARACTER) -->
+    <div id="cat-character" class="anim-idle">
+      <svg class="cat-svg" viewBox="0 0 260 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="catCoat" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stop-color="#b0b8c4"/>
+            <stop offset="65%" stop-color="#8a94a6"/>
+            <stop offset="100%" stop-color="#64748b"/>
+          </radialGradient>
+          <radialGradient id="catBelly" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#e2e8f0"/>
+          </radialGradient>
+          <radialGradient id="catEye" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#6ee7b7"/>
+            <stop offset="50%" stop-color="#10b981"/>
+            <stop offset="100%" stop-color="#047857"/>
+          </radialGradient>
+          <linearGradient id="innerEar" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fbcfe8"/>
+            <stop offset="100%" stop-color="#f472b6"/>
+          </linearGradient>
+        </defs>
+
+        <!-- TAIL -->
+        <g id="cat-tail" class="tail-part">
+          <path d="M 160 310 C 220 300 250 250 230 200 C 220 180 200 190 205 210 C 215 240 190 270 150 295 Z" fill="url(#catCoat)" />
+          <circle cx="215" cy="195" r="14" fill="#ffffff" />
+        </g>
+
+        <!-- PAWS -->
+        <ellipse cx="90" cy="340" rx="26" ry="16" fill="url(#catCoat)" />
+        <ellipse cx="90" cy="345" rx="20" ry="12" fill="#ffffff" />
+        <ellipse cx="170" cy="340" rx="26" ry="16" fill="url(#catCoat)" />
+        <ellipse cx="170" cy="345" rx="20" ry="12" fill="#ffffff" />
+
+        <!-- BODY -->
+        <ellipse id="touch-body" cx="130" cy="260" rx="65" ry="85" fill="url(#catCoat)" />
+        <ellipse id="touch-belly" cx="130" cy="270" rx="44" ry="60" fill="url(#catBelly)" />
+
+        <!-- HANDS -->
+        <g id="hand-left">
+          <path d="M 68 230 C 50 250 45 280 62 295 C 72 302 85 290 80 275 C 75 260 82 245 88 235 Z" fill="url(#catCoat)"/>
+          <circle cx="62" cy="290" r="14" fill="#ffffff" />
+        </g>
+        <g id="hand-right">
+          <path d="M 192 230 C 210 250 215 280 198 295 C 188 302 175 290 180 275 C 185 260 178 245 172 235 Z" fill="url(#catCoat)"/>
+          <circle cx="198" cy="290" r="14" fill="#ffffff" />
+        </g>
+
+        <!-- COSTUMES -->
+        <g id="item-bowtie" style="display:none;">
+          <polygon points="110,185 110,205 130,195" fill="#ef4444" />
+          <polygon points="150,185 150,205 130,195" fill="#ef4444" />
+          <circle cx="130" cy="195" r="5" fill="#b91c1c" />
+        </g>
+        <g id="item-chain" style="display:none;">
+          <path d="M 95 190 Q 130 220 165 190" stroke="#facc15" stroke-width="6" fill="none" />
+          <circle cx="130" cy="210" r="10" fill="#f59e0b" />
+          <text x="130" y="214" font-size="10" font-weight="900" fill="#78350f" text-anchor="middle">T</text>
+        </g>
+
+        <!-- EARS -->
+        <g id="touch-head-ears">
+          <g class="ear-left">
+            <polygon points="50,110 75,30 110,95" fill="url(#catCoat)" />
+            <polygon points="58,102 76,45 102,90" fill="url(#innerEar)" />
+          </g>
+          <g class="ear-right">
+            <polygon points="150,95 185,30 210,110" fill="url(#catCoat)" />
+            <polygon points="158,90 184,45 202,102" fill="url(#innerEar)" />
+          </g>
+        </g>
+
+        <!-- HEAD -->
+        <g id="touch-head">
+          <ellipse cx="130" cy="125" rx="72" ry="64" fill="url(#catCoat)" />
+          <path d="M 58 135 L 42 142 L 60 148 L 44 156 L 66 160 Z" fill="url(#catCoat)" />
+          <path d="M 202 135 L 218 142 L 200 148 L 216 156 L 194 160 Z" fill="url(#catCoat)" />
+          <path d="M 130 65 L 130 85 M 120 70 L 123 85 M 140 70 L 137 85" stroke="#475569" stroke-width="4" stroke-linecap="round" />
+
+          <!-- EYES -->
+          <g id="cat-eyes-group">
+            <ellipse cx="102" cy="115" rx="20" ry="24" fill="#ffffff" />
+            <ellipse cx="158" cy="115" rx="20" ry="24" fill="#ffffff" />
+
+            <!-- Normal Pupil Tracking -->
+            <g id="normal-eyes">
+              <circle id="iris-left" cx="102" cy="115" r="14" fill="url(#catEye)" />
+              <circle id="pupil-left" cx="102" cy="115" r="8" fill="#0f172a" />
+              <circle cx="98" cy="110" r="4" fill="#ffffff" />
+              <circle id="iris-right" cx="158" cy="115" r="14" fill="url(#catEye)" />
+              <circle id="pupil-right" cx="158" cy="115" r="8" fill="#0f172a" />
+              <circle cx="154" cy="110" r="4" fill="#ffffff" />
+            </g>
+
+            <!-- Happy Eyes -->
+            <g id="happy-eyes" style="display:none;">
+              <path d="M 88 120 Q 102 100 116 120" stroke="#0f172a" stroke-width="4" fill="none" stroke-linecap="round" />
+              <path d="M 144 120 Q 158 100 172 120" stroke="#0f172a" stroke-width="4" fill="none" stroke-linecap="round" />
+            </g>
+
+            <!-- Dizzy Eyes -->
+            <g id="dizzy-eyes" style="display:none;">
+              <path d="M 94 115 A 8 8 0 1 1 106 115 A 6 6 0 1 1 98 115" stroke="#ef4444" stroke-width="3" fill="none" />
+              <path d="M 150 115 A 8 8 0 1 1 162 115 A 6 6 0 1 1 154 115" stroke="#ef4444" stroke-width="3" fill="none" />
+            </g>
+
+            <!-- Sleep Eyes -->
+            <g id="sleep-eyes" style="display:none;">
+              <path d="M 88 116 Q 102 124 116 116" stroke="#334155" stroke-width="4" fill="none" stroke-linecap="round" />
+              <path d="M 144 116 Q 158 124 172 116" stroke="#334155" stroke-width="4" fill="none" stroke-linecap="round" />
+            </g>
+
+            <circle id="blush-left" cx="82" cy="138" r="10" fill="#f43f5e" opacity="0.4" />
+            <circle id="blush-right" cx="178" cy="138" r="10" fill="#f43f5e" opacity="0.4" />
+          </g>
+
+          <!-- SNOUT -->
+          <ellipse cx="130" cy="144" rx="28" ry="18" fill="#ffffff" />
+          <path id="touch-nose" d="M 125 136 Q 130 134 135 136 Q 130 144 125 136 Z" fill="#ec4899" />
+
+          <!-- MOUTH -->
+          <g id="cat-mouth-group">
+            <path id="mouth-smile" d="M 120 144 Q 130 152 140 144" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round" />
+            <ellipse id="mouth-open" cx="130" cy="150" rx="9" ry="8" fill="#881337" style="display:none;" />
+            <path id="mouth-tongue" d="M 125 154 Q 130 158 135 154" fill="#fb7185" style="display:none;" />
+            <ellipse id="mouth-wide" cx="130" cy="152" rx="16" ry="14" fill="#7f1d1d" style="display:none;" />
+          </g>
+
+          <!-- WHISKERS -->
+          <g stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.9">
+            <line x1="105" y1="142" x2="60" y2="136" />
+            <line x1="105" y1="146" x2="55" y2="148" />
+            <line x1="105" y1="150" x2="62" y2="160" />
+            <line x1="155" y1="142" x2="200" y2="136" />
+            <line x1="155" y1="146" x2="205" y2="148" />
+            <line x1="155" y1="150" x2="198" y2="160" />
+          </g>
+        </g>
+
+        <!-- ACCESSORIES -->
+        <g id="item-glasses" style="display:none;">
+          <rect x="80" y="102" width="42" height="26" rx="8" fill="#0f172a" />
+          <rect x="138" y="102" width="42" height="26" rx="8" fill="#0f172a" />
+          <line x1="122" y1="112" x2="138" y2="112" stroke="#0f172a" stroke-width="4" />
+          <line x1="84" y1="106" x2="100" y2="124" stroke="rgba(255,255,255,0.4)" stroke-width="2" />
+          <line x1="142" y1="106" x2="158" y2="124" stroke="rgba(255,255,255,0.4)" stroke-width="2" />
+        </g>
+        <g id="item-partyhat" style="display:none;">
+          <polygon points="130,2 105,65 155,65" fill="#8b5cf6" />
+          <polygon points="110,65 130,30 145,65" fill="#f43f5e" />
+          <circle cx="130" cy="2" r="8" fill="#facc15" />
+        </g>
+        <g id="item-cap" style="display:none;">
+          <path d="M 85 70 Q 130 35 175 70 Z" fill="#ef4444" />
+          <ellipse cx="145" cy="72" rx="42" ry="10" fill="#dc2626" />
+          <circle cx="130" cy="48" r="5" fill="#ffffff" />
+        </g>
+        <g id="item-sleepmask" style="display:none;">
+          <rect x="80" y="104" width="100" height="26" rx="12" fill="#6366f1" />
+          <text x="100" y="122" font-size="12" fill="#ffffff">Z</text>
+          <text x="115" y="120" font-size="10" fill="#ffffff">z</text>
+          <text x="127" y="118" font-size="8" fill="#ffffff">z</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- ROOM INTERACTIVE BUTTONS -->
+    <div id="dock-kitchen" class="room-tools-dock" style="display:none;">
+      <button class="tool-btn" data-food="milk"><span>🥛</span><span>Doodh</span></button>
+      <button class="tool-btn" data-food="fish"><span>🐟</span><span>Machhli</span></button>
+      <button class="tool-btn" data-food="cake"><span>🎂</span><span>Cake</span></button>
+      <button class="tool-btn" data-food="chilli" style="border-color:#ef4444; color:#dc2626;"><span>🌶️</span><span>Mirchi!</span></button>
+    </div>
+
+    <div id="dock-bathroom" class="room-tools-dock" style="display:none;">
+      <button id="btn-soap" class="tool-btn"><span>🧼</span><span>Sabun Lagao</span></button>
+      <button id="btn-shower" class="tool-btn"><span>🚿</span><span>Shower Chalao</span></button>
+      <button id="btn-brush" class="tool-btn"><span>🪥</span><span>Brush Karo</span></button>
+    </div>
+
+    <div id="dock-bedroom" class="room-tools-dock" style="display:none;">
+      <button id="btn-sleep-toggle" class="tool-btn"><span>🌙</span><span>Sulana / Jagana</span></button>
+    </div>
+  </main>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="bottom-nav">
+    <button class="nav-tab active" data-room="living">
+      <span class="tab-icon">🛋️</span>
+      <span>Living</span>
+    </button>
+    <button class="nav-tab" data-room="kitchen">
+      <span class="tab-icon">🍖</span>
+      <span>Kitchen</span>
+    </button>
+    <button class="nav-tab" data-room="bathroom">
+      <span class="tab-icon">🛁</span>
+      <span>Bath</span>
+    </button>
+    <button class="nav-tab" data-room="bedroom">
+      <span class="tab-icon">🛏️</span>
+      <span>Sleep</span>
+    </button>
+    <button class="nav-tab" id="btn-open-game">
+      <span class="tab-icon">🎮</span>
+      <span>Game</span>
+    </button>
+    <button class="nav-tab" id="btn-open-wardrobe">
+      <span class="tab-icon">🎩</span>
+      <span>Closet</span>
+    </button>
+  </nav>
+
+  <!-- WARDROBE MODAL -->
+  <div id="modal-wardrobe" class="modal-panel">
+    <div class="modal-header">
+      <h2><span>🎩</span> Tom Ki Almari</h2>
+      <button class="close-btn" id="btn-close-wardrobe">✕</button>
+    </div>
+    <div class="wardrobe-grid" id="wardrobe-items-container"></div>
+  </div>
+
+  <!-- MINI-GAME MODAL -->
+  <div id="modal-game" class="modal-panel">
+    <div class="modal-header">
+      <h2><span>🐭</span> Chuha Pakdo Mini-Game</h2>
+      <button class="close-btn" id="btn-close-game">✕</button>
+    </div>
+    <div id="mini-game-stage">
+      <div class="game-score-bar">
+        <span>Score: <span id="game-score">0</span></span>
+        <span>Time: <span id="game-timer">30</span>s</span>
+        <span>🪙 +<span id="game-coins">0</span></span>
+      </div>
+      <div id="game-start-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,0.7); display:flex; flex-direction:column; justify-content:center; align-items:center; gap:16px; color:#fff; z-index:20;">
+        <h3 style="font-size:22px; font-weight:800;">Ch चूहे Aur Treats Pakdo!</h3>
+        <p style="font-size:13px; text-align:center; padding:0 20px; color:#cbd5e1;">Girne wale items par tap karo coins jeetne ke liye! Bomb 💣 se bacho!</p>
+        <button id="btn-start-minigame" style="background:#22c55e; color:#fff; font-weight:800; font-size:16px; border:none; padding:12px 28px; border-radius:30px; cursor:pointer;">Khel Shuru Karo 🚀</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SCRIPT LOGIC -->
+<script>
+(() => {
+  const state = {
+    level: 1,
+    coins: 150,
+    happy: 85,
+    hunger: 70,
+    hygiene: 60,
+    energy: 90,
+    currentRoom: 'living',
+    isSleeping: false,
+    isListening: false,
+    wardrobe: { glasses: false, partyhat: false, cap: false, bowtie: false, chain: false },
+    ownedItems: ['glasses']
+  };
+
+  // SOUND SYNTHESIZER (ZERO ASSET DEPENDENCY)
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  let audioCtx = null;
+
+  function initAudio() {
+    if (!audioCtx) audioCtx = new AudioContextClass();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  const SoundFX = {
+    click() {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.05);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+    },
+    meow() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(380, now);
+      osc.frequency.linearRampToValueAtTime(750, now + 0.2);
+      osc.frequency.linearRampToValueAtTime(520, now + 0.45);
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.15);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.45);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); osc.stop(now + 0.45);
+    },
+    happyPurr() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, osc = audioCtx.createOscillator(), lfo = audioCtx.createOscillator();
+      const lfoGain = audioCtx.createGain(), gain = audioCtx.createGain();
+      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(65, now);
+      lfo.frequency.setValueAtTime(14, now); lfoGain.gain.setValueAtTime(25, now);
+      lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); lfo.start(now);
+      osc.stop(now + 0.35); lfo.stop(now + 0.35);
+    },
+    bonk() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.2);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); osc.stop(now + 0.2);
+    },
+    munch() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      for (let i = 0; i < 3; i++) {
+        const time = now + (i * 0.1), osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(450 - (i * 40), time);
+        osc.frequency.exponentialRampToValueAtTime(120, time + 0.08);
+        gain.gain.setValueAtTime(0.25, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(time); osc.stop(time + 0.08);
+      }
+    },
+    spicyYell() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(400, now);
+      osc.frequency.linearRampToValueAtTime(1200, now + 0.25);
+      osc.frequency.linearRampToValueAtTime(600, now + 0.5);
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); osc.stop(now + 0.5);
+    },
+    bubblePop() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(800 + Math.random() * 400, now);
+      osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); osc.stop(now + 0.08);
+    },
+    waterSplash() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, bufferSize = audioCtx.sampleRate * 0.3;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+      const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1200, now); filter.Q.setValueAtTime(3, now);
+      const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+      noise.start(now);
+    },
+    coin() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, osc1 = audioCtx.createOscillator(), osc2 = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc1.type = 'sine'; osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(987.77, now);
+      osc2.frequency.setValueAtTime(1318.51, now + 0.08);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+      osc1.connect(gain); osc2.connect(gain); gain.connect(audioCtx.destination);
+      osc1.start(now); osc1.stop(now + 0.08);
+      osc2.start(now + 0.08); osc2.stop(now + 0.35);
+    },
+    snore() {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(110, now);
+      osc.frequency.linearRampToValueAtTime(160, now + 0.3);
+      osc.frequency.linearRampToValueAtTime(90, now + 0.6);
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.linearRampToValueAtTime(0.18, now + 0.3);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); osc.stop(now + 0.6);
+    }
+  };
+
+  function vibrate(ms = 30) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+  function showToast(text) {
+    const toast = document.getElementById('toast');
+    toast.textContent = text;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  let speechTimer = null;
+  function showCatSpeech(text, duration = 3000) {
+    const bubble = document.getElementById('cat-speech');
+    bubble.textContent = text;
+    bubble.classList.add('show');
+    clearTimeout(speechTimer);
+    speechTimer = setTimeout(() => bubble.classList.remove('show'), duration);
+  }
+
+  // CHARACTER CONTROLLER
+  const catEl = document.getElementById('cat-character');
+  const normalEyes = document.getElementById('normal-eyes');
+  const happyEyes = document.getElementById('happy-eyes');
+  const dizzyEyes = document.getElementById('dizzy-eyes');
+  const sleepEyes = document.getElementById('sleep-eyes');
+  const mouthSmile = document.getElementById('mouth-smile');
+  const mouthOpen = document.getElementById('mouth-open');
+  const mouthTongue = document.getElementById('mouth-tongue');
+  const mouthWide = document.getElementById('mouth-wide');
+
+  function resetFace() {
+    normalEyes.style.display = 'inline';
+    happyEyes.style.display = 'none';
+    dizzyEyes.style.display = 'none';
+    sleepEyes.style.display = 'none';
+    mouthSmile.style.display = 'inline';
+    mouthOpen.style.display = 'none';
+    mouthTongue.style.display = 'none';
+    mouthWide.style.display = 'none';
+    catEl.className = 'anim-idle';
+  }
+
+  function setHappyFace() {
+    normalEyes.style.display = 'none';
+    happyEyes.style.display = 'inline';
+    dizzyEyes.style.display = 'none';
+    sleepEyes.style.display = 'none';
+    mouthSmile.style.display = 'inline';
+    mouthOpen.style.display = 'none';
+    mouthWide.style.display = 'none';
+  }
+
+  function setDizzyFace() {
+    normalEyes.style.display = 'none';
+    happyEyes.style.display = 'none';
+    dizzyEyes.style.display = 'inline';
+    sleepEyes.style.display = 'none';
+    mouthSmile.style.display = 'none';
+    mouthWide.style.display = 'inline';
+    catEl.className = 'anim-dizzy';
+  }
+
+  function setSleepingFace() {
+    normalEyes.style.display = 'none';
+    happyEyes.style.display = 'none';
+    dizzyEyes.style.display = 'none';
+    sleepEyes.style.display = 'inline';
+    mouthSmile.style.display = 'inline';
+    mouthOpen.style.display = 'none';
+    mouthWide.style.display = 'none';
+    catEl.className = '';
+  }
+
+  function animateTalking(durationMs = 2500) {
+    let startTime = Date.now(), toggle = false;
+    const interval = setInterval(() => {
+      if (Date.now() - startTime > durationMs) {
+        clearInterval(interval);
+        mouthSmile.style.display = 'inline';
+        mouthOpen.style.display = 'none';
+        mouthTongue.style.display = 'none';
+        return;
+      }
+      toggle = !toggle;
+      mouthSmile.style.display = toggle ? 'none' : 'inline';
+      mouthOpen.style.display = toggle ? 'inline' : 'none';
+      mouthTongue.style.display = toggle ? 'inline' : 'none';
+    }, 120);
+  }
+
+  const fxLayer = document.getElementById('fx-layer');
+  function spawnParticle(x, y, emoji) {
+    const el = document.createElement('div');
+    el.className = 'particle';
+    el.textContent = emoji;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.fontSize = `${20 + Math.random() * 16}px`;
+    fxLayer.appendChild(el);
+    setTimeout(() => el.remove(), 1000);
+  }
+
+  // PUPIL TRACKING
+  const pupilLeft = document.getElementById('pupil-left');
+  const pupilRight = document.getElementById('pupil-right');
+  const irisLeft = document.getElementById('iris-left');
+  const irisRight = document.getElementById('iris-right');
+
+  window.addEventListener('pointermove', (e) => {
+    if (state.isSleeping || dizzyEyes.style.display === 'inline') return;
+    const rect = catEl.getBoundingClientRect();
+    const catCenterX = rect.left + rect.width / 2;
+    const catCenterY = rect.top + rect.height * 0.35;
+    const dx = Math.max(-1, Math.min(1, (e.clientX - catCenterX) / 140));
+    const dy = Math.max(-1, Math.min(1, (e.clientY - catCenterY) / 140));
+
+    irisLeft.setAttribute('cx', 102 + dx * 5); irisLeft.setAttribute('cy', 115 + dy * 5);
+    pupilLeft.setAttribute('cx', 102 + dx * 5); pupilLeft.setAttribute('cy', 115 + dy * 5);
+    irisRight.setAttribute('cx', 158 + dx * 5); irisRight.setAttribute('cy', 115 + dy * 5);
+    pupilRight.setAttribute('cx', 158 + dx * 5); pupilRight.setAttribute('cy', 115 + dy * 5);
+  });
+
+  // STAT METERS
+  function updateUI() {
+    document.getElementById('level-num').textContent = state.level;
+    document.getElementById('coins-num').textContent = state.coins;
+    document.getElementById('bar-happy').style.width = `${state.happy}%`;
+    document.getElementById('bar-hunger').style.width = `${state.hunger}%`;
+    document.getElementById('bar-hygiene').style.width = `${state.hygiene}%`;
+    document.getElementById('bar-energy').style.width = `${state.energy}%`;
+  }
+
+  function adjustStat(key, delta) {
+    state[key] = Math.max(0, Math.min(100, state[key] + delta));
+    if (delta > 0) state.coins += 2;
+    updateUI();
+  }
+
+  setInterval(() => {
+    if (!state.isSleeping) {
+      adjustStat('energy', -1);
+    } else {
+      adjustStat('energy', 3);
+      if (Math.random() < 0.6) {
+        SoundFX.snore();
+        const rect = catEl.getBoundingClientRect();
+        spawnParticle(rect.left + 140, rect.top + 80, '💤');
+      }
+    }
+    adjustStat('hunger', -0.5);
+    adjustStat('happy', -0.5);
+  }, 4000);
+
+  // PETTING & TOUCH
+  let isPetting = false, lastPetX = 0, lastPetY = 0;
+  const headEl = document.getElementById('touch-head');
+  
+  headEl.addEventListener('pointerdown', (e) => {
+    initAudio(); isPetting = true;
+    lastPetX = e.clientX; lastPetY = e.clientY;
+  });
+
+  headEl.addEventListener('pointermove', (e) => {
+    if (!isPetting || state.isSleeping) return;
+    const dist = Math.hypot(e.clientX - lastPetX, e.clientY - lastPetY);
+    if (dist > 18) {
+      lastPetX = e.clientX; lastPetY = e.clientY;
+      SoundFX.happyPurr();
+      vibrate(20);
+      setHappyFace();
+      catEl.className = 'anim-purr';
+      adjustStat('happy', 3);
+      spawnParticle(e.clientX, e.clientY - 20, '❤️');
+    }
+  });
+
+  headEl.addEventListener('pointerup', () => {
+    if (isPetting && !state.isSleeping) setTimeout(resetFace, 800);
+    isPetting = false;
+  });
+
+  headEl.addEventListener('click', (e) => {
+    if (state.isSleeping) return;
+    initAudio(); SoundFX.bonk(); vibrate(60);
+    setDizzyFace(); adjustStat('happy', -5);
+    showCatSpeech('Arey ouch! Mat maaro! 😿', 2000);
+    spawnParticle(e.clientX, e.clientY - 30, '⭐');
+    setTimeout(resetFace, 1400);
+  });
+
+  document.getElementById('touch-belly').addEventListener('click', (e) => {
+    if (state.isSleeping) return;
+    initAudio(); SoundFX.happyPurr(); vibrate(30);
+    setHappyFace(); adjustStat('happy', 4);
+    showCatSpeech('Hehehe! Gudgudi ho rahi hai! 😹', 2000);
+    spawnParticle(e.clientX, e.clientY - 30, '💖');
+    setTimeout(resetFace, 900);
+  });
+
+  document.getElementById('cat-tail').addEventListener('click', (e) => {
+    if (state.isSleeping) return;
+    initAudio(); SoundFX.meow(); vibrate(50);
+    setDizzyFace();
+    showCatSpeech('Meeooow! Meri poonchh mat kheencho! 🙀', 2000);
+    spawnParticle(e.clientX, e.clientY - 20, '💢');
+    setTimeout(resetFace, 1200);
+  });
+
+  document.getElementById('touch-nose').addEventListener('click', (e) => {
+    if (state.isSleeping) return;
+    initAudio(); SoundFX.bubblePop(); vibrate(30);
+    showCatSpeech('Boop! 👃✨', 1500);
+    spawnParticle(e.clientX, e.clientY - 20, '✨');
+  });
+
+  // ROOM SWITCHING
+  const rooms = {
+    living: { stageClass: 'room-living', sceneryId: 'scenery-living', dockId: null },
+    kitchen: { stageClass: 'room-kitchen', sceneryId: 'scenery-kitchen', dockId: 'dock-kitchen' },
+    bathroom: { stageClass: 'room-bathroom', sceneryId: 'scenery-bathroom', dockId: 'dock-bathroom' },
+    bedroom: { stageClass: 'room-bedroom', sceneryId: 'scenery-bedroom', dockId: 'dock-bedroom' }
+  };
+  const stage = document.getElementById('room-stage');
+  const navTabs = document.querySelectorAll('.nav-tab[data-room]');
+
+  function switchRoom(roomName) {
+    initAudio(); SoundFX.click(); state.currentRoom = roomName;
+    navTabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-room') === roomName));
+    stage.className = `room-stage ${rooms[roomName].stageClass}`;
+    if (roomName === 'bedroom' && state.isSleeping) stage.classList.add('lights-off');
+
+    Object.keys(rooms).forEach(r => {
+      const sc = document.getElementById(rooms[r].sceneryId);
+      if (sc) sc.style.display = (r === roomName) ? 'block' : 'none';
+      if (rooms[r].dockId) {
+        const dk = document.getElementById(rooms[r].dockId);
+        if (dk) dk.style.display = (r === roomName) ? 'flex' : 'none';
+      }
+    });
+
+    if (roomName === 'living') showCatSpeech('Chalo masti karte hain! 😺', 2000);
+    else if (roomName === 'kitchen') showCatSpeech('Khaane ka time! 😋', 2000);
+    else if (roomName === 'bathroom') showCatSpeech('Nahana zaroori hai! 🧼', 2000);
+    else if (roomName === 'bedroom') showCatSpeech('Arey aalas aa raha hai... 🥱', 2000);
+  }
+
+  navTabs.forEach(tab => tab.addEventListener('click', () => switchRoom(tab.getAttribute('data-room'))));
+
+  // KITCHEN
+  document.querySelectorAll('#dock-kitchen .tool-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      initAudio();
+      const foodType = btn.getAttribute('data-food');
+      const rect = catEl.getBoundingClientRect();
+      const mouthX = rect.left + rect.width / 2;
+      const mouthY = rect.top + rect.height * 0.4;
+
+      if (foodType === 'chilli') {
+        SoundFX.spicyYell(); vibrate([100, 50, 100, 50, 200]);
+        setDizzyFace(); mouthWide.style.display = 'inline';
+        showCatSpeech('MIRCHI! BOOOHOOOT TEEKHA HAI! 🌶️🔥', 3000);
+        for (let i = 0; i < 8; i++) {
+          setTimeout(() => {
+            spawnParticle(mouthX + (Math.random()*40-20), mouthY - 30, '🔥');
+            spawnParticle(mouthX + (Math.random()*40-20), mouthY - 50, '💨');
+          }, i * 80);
+        }
+        adjustStat('happy', -10);
+        setTimeout(resetFace, 2500);
+      } else {
+        SoundFX.munch(); vibrate(40);
+        animateTalking(1200); setHappyFace();
+        adjustStat('hunger', 25); adjustStat('happy', 10);
+        showCatSpeech('Mmm yummy! Bohot swadisht! 😋', 2000);
+        const foodEmojis = { milk: '🥛', fish: '🐟', cake: '🎂' };
+        spawnParticle(mouthX, mouthY - 20, foodEmojis[foodType] || '😋');
+        setTimeout(resetFace, 1500);
+      }
+    });
+  });
+
+  // BATHROOM
+  function spawnSoapBubble() {
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble-item';
+    const size = 24 + Math.random() * 28;
+    bubble.style.width = `${size}px`; bubble.style.height = `${size}px`;
+    const rect = catEl.getBoundingClientRect();
+    bubble.style.left = `${rect.left + 30 + Math.random() * (rect.width - 60)}px`;
+    bubble.style.top = `${rect.top + 60 + Math.random() * (rect.height - 140)}px`;
+
+    bubble.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); SoundFX.bubblePop(); vibrate(20);
+      spawnParticle(e.clientX, e.clientY, '✨');
+      bubble.remove(); state.coins += 1; updateUI();
+    });
+    fxLayer.appendChild(bubble);
+  }
+
+  document.getElementById('btn-soap').addEventListener('click', () => {
+    initAudio(); SoundFX.bubblePop(); vibrate(30);
+    showCatSpeech('Jhaag hi jhaag! 🫧🧼', 2000);
+    for (let i = 0; i < 7; i++) setTimeout(spawnSoapBubble, i * 100);
+  });
+
+  function triggerShower() {
+    initAudio(); SoundFX.waterSplash(); vibrate([40, 30, 40]);
+    const spray = document.getElementById('water-spray');
+    spray.style.display = 'block';
+    showCatSpeech('Ahaa! Thanda paani bohot mast hai! 💦', 2500);
+    document.querySelectorAll('.bubble-item').forEach(b => {
+      setTimeout(() => { SoundFX.bubblePop(); b.remove(); }, Math.random() * 800);
+    });
+    adjustStat('hygiene', 30); adjustStat('happy', 10);
+    setTimeout(() => { spray.style.display = 'none'; }, 1500);
+  }
+  document.getElementById('btn-shower').addEventListener('click', triggerShower);
+  document.getElementById('shower-head-btn').addEventListener('click', triggerShower);
+
+  document.getElementById('btn-brush').addEventListener('click', () => {
+    initAudio(); SoundFX.munch(); vibrate(40);
+    setHappyFace(); animateTalking(1500);
+    showCatSpeech('Daant ekdum chamakdar! ✨🪥', 2000);
+    adjustStat('hygiene', 15);
+    const rect = catEl.getBoundingClientRect();
+    spawnParticle(rect.left + rect.width / 2, rect.top + rect.height * 0.4, '✨');
+    setTimeout(resetFace, 1800);
+  });
+
+  // BEDROOM
+  const btnSleep = document.getElementById('btn-sleep-toggle');
+  const lampBtn = document.getElementById('lamp-btn');
+  const lampGlow = document.getElementById('lamp-glow');
+  const sleepMask = document.getElementById('item-sleepmask');
+
+  function toggleSleep() {
+    initAudio(); SoundFX.click(); state.isSleeping = !state.isSleeping;
+    if (state.isSleeping) {
+      stage.classList.add('lights-off');
+      lampGlow.style.opacity = '0';
+      setSleepingFace();
+      sleepMask.style.display = 'inline';
+      showCatSpeech('Shh... Tom so raha hai! 😴💤', 2500);
+      btnSleep.innerHTML = '<span>☀️</span><span>Jagaao!</span>';
+    } else {
+      stage.classList.remove('lights-off');
+      lampGlow.style.opacity = '1';
+      sleepMask.style.display = 'none';
+      resetFace(); SoundFX.meow();
+      showCatSpeech('Suprabhat! Main jaag gaya! 😺✨', 2000);
+      btnSleep.innerHTML = '<span>🌙</span><span>Sulana</span>';
+      adjustStat('energy', 40);
+    }
+  }
+  btnSleep.addEventListener('click', toggleSleep);
+  lampBtn.addEventListener('click', toggleSleep);
+
+  // VOICE RECORDER (HELIUM PITCH SHIFT)
+  const btnMic = document.getElementById('btn-mic');
+  const micLabel = document.getElementById('mic-label');
+  let mediaRecorder = null, audioChunks = [];
+
+  async function toggleVoiceRecording() {
+    initAudio();
+    if (state.isListening) {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      state.isListening = false;
+      btnMic.classList.remove('recording');
+      micLabel.textContent = 'Tom se Bolo';
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        try {
+          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+          playHeliumVoice(audioBuffer);
+        } catch {
+          speakWithTTS('Mujhe sunai diya! Mew mew!');
+        }
+      };
+
+      mediaRecorder.start();
+      state.isListening = true;
+      btnMic.classList.add('recording');
+      micLabel.textContent = 'Sun raha hoon...';
+      showCatSpeech('Bolo dost, main dhyan se sun raha hoon! 👂🎙️', 4000);
+      setTimeout(() => { if (state.isListening) toggleVoiceRecording(); }, 4500);
+
+    } catch {
+      showToast('Mic permission nahi mila. Dialogues use karein!');
+      speakWithTTS('Namaste! Mujhe aapki aawaz bohot pasand hai!');
+    }
+  }
+
+  function playHeliumVoice(audioBuffer) {
+    if (!audioCtx) return;
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.playbackRate.value = 1.45; // Helium cat voice
+    source.connect(audioCtx.destination);
+    const durationMs = (audioBuffer.duration / 1.45) * 1000;
+    source.start();
+    showCatSpeech('Mew mew! Suno meri cute aawaz! 🐱🎶', durationMs);
+    animateTalking(durationMs);
+  }
+  btnMic.addEventListener('click', toggleVoiceRecording);
+
+  function speakWithTTS(text) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.15; utterance.pitch = 1.85; utterance.lang = 'hi-IN';
+      showCatSpeech(text, 3500); animateTalking(2500);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      showCatSpeech(text, 3000); SoundFX.meow(); animateTalking(2000);
+    }
+  }
+
+  const phrasesDrawer = document.getElementById('phrases-drawer');
+  document.getElementById('btn-phrases-toggle').addEventListener('click', () => {
+    initAudio(); SoundFX.click();
+    const isVisible = phrasesDrawer.style.display === 'block';
+    phrasesDrawer.style.display = isVisible ? 'none' : 'block';
+  });
+
+  document.querySelectorAll('.phrase-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      initAudio(); SoundFX.click();
+      speakWithTTS(chip.getAttribute('data-text'));
+      phrasesDrawer.style.display = 'none';
+    });
+  });
+
+  document.getElementById('btn-speak-custom').addEventListener('click', () => {
+    const input = document.getElementById('custom-speech-input');
+    const val = input.value.trim();
+    if (val) {
+      initAudio(); speakWithTTS(val);
+      input.value = ''; phrasesDrawer.style.display = 'none';
+    }
+  });
+
+  // WARDROBE
+  const wardrobeItems = [
+    { id: 'glasses', name: 'Cool Shades', emoji: '🕶️', price: 0, elId: 'item-glasses' },
+    { id: 'partyhat', name: 'Party Hat', emoji: '🥳', price: 40, elId: 'item-partyhat' },
+    { id: 'cap', name: 'Red Cap', emoji: '🧢', price: 60, elId: 'item-cap' },
+    { id: 'bowtie', name: 'Red Bowtie', emoji: '🎀', price: 30, elId: 'item-bowtie' },
+    { id: 'chain', name: 'Gold Chain', emoji: '👑', price: 100, elId: 'item-chain' }
+  ];
+  const modalWardrobe = document.getElementById('modal-wardrobe');
+  const wardrobeContainer = document.getElementById('wardrobe-items-container');
+
+  function renderWardrobe() {
+    wardrobeContainer.innerHTML = '';
+    wardrobeItems.forEach(item => {
+      const isOwned = state.ownedItems.includes(item.id);
+      const isEquipped = state.wardrobe[item.id];
+      const card = document.createElement('div');
+      card.className = `wardrobe-card ${isEquipped ? 'equipped' : ''}`;
+      card.innerHTML = `
+        <span class="item-emoji">${item.emoji}</span>
+        <span class="item-name">${item.name}</span>
+        <button class="item-btn ${!isOwned ? 'btn-buy' : isEquipped ? 'btn-equipped' : 'btn-equip'}">
+          ${!isOwned ? `🪙 ${item.price}` : isEquipped ? 'Equipped ✅' : 'Pahno'}
+        </button>
+      `;
+
+      card.addEventListener('click', () => {
+        initAudio();
+        if (!isOwned) {
+          if (state.coins >= item.price) {
+            state.coins -= item.price;
+            state.ownedItems.push(item.id);
+            SoundFX.coin(); showToast(`${item.name} kharid liya! 🎉`);
+            renderWardrobe(); updateUI();
+          } else {
+            showToast('Coins kam hain! Mini-game khelo!'); SoundFX.bonk();
+          }
+        } else {
+          state.wardrobe[item.id] = !state.wardrobe[item.id];
+          const el = document.getElementById(item.elId);
+          if (el) el.style.display = state.wardrobe[item.id] ? 'inline' : 'none';
+          SoundFX.click(); renderWardrobe();
+        }
+      });
+      wardrobeContainer.appendChild(card);
+    });
+  }
+
+  document.getElementById('btn-open-wardrobe').addEventListener('click', () => {
+    initAudio(); SoundFX.click(); renderWardrobe();
+    modalWardrobe.style.display = 'flex';
+  });
+  document.getElementById('btn-close-wardrobe').addEventListener('click', () => {
+    initAudio(); SoundFX.click(); modalWardrobe.style.display = 'none';
+  });
+
+  // MINI-GAME
+  const modalGame = document.getElementById('modal-game');
+  const miniGameStage = document.getElementById('mini-game-stage');
+  const gameStartOverlay = document.getElementById('game-start-overlay');
+  const scoreEl = document.getElementById('game-score');
+  const timerEl = document.getElementById('game-timer');
+  const earnedCoinsEl = document.getElementById('game-coins');
+
+  let miniGameActive = false, gameScore = 0, gameCoinsEarned = 0, gameTimeRemaining = 30;
+  let gameInterval = null, spawnInterval = null;
+
+  document.getElementById('btn-open-game').addEventListener('click', () => {
+    initAudio(); SoundFX.click(); modalGame.style.display = 'flex';
+    gameStartOverlay.style.display = 'flex';
+  });
+  document.getElementById('btn-close-game').addEventListener('click', () => {
+    initAudio(); SoundFX.click(); endMiniGame();
+    modalGame.style.display = 'none';
+  });
+  document.getElementById('btn-start-minigame').addEventListener('click', () => {
+    initAudio(); SoundFX.click();
+    gameStartOverlay.style.display = 'none'; startMiniGame();
+  });
+
+  function startMiniGame() {
+    miniGameActive = true; gameScore = 0; gameCoinsEarned = 0; gameTimeRemaining = 30;
+    scoreEl.textContent = '0'; timerEl.textContent = '30'; earnedCoinsEl.textContent = '0';
+    document.querySelectorAll('.falling-target').forEach(el => el.remove());
+
+    gameInterval = setInterval(() => {
+      gameTimeRemaining--;
+      timerEl.textContent = gameTimeRemaining;
+      if (gameTimeRemaining <= 0) endMiniGame();
+    }, 1000);
+
+    spawnInterval = setInterval(spawnMiniGameTarget, 650);
+  }
+
+  function spawnMiniGameTarget() {
+    if (!miniGameActive) return;
+    const targets = [
+      { emoji: '🐭', score: 10, coins: 5, isBomb: false },
+      { emoji: '🐟', score: 15, coins: 8, isBomb: false },
+      { emoji: '🧀', score: 5, coins: 3, isBomb: false },
+      { emoji: '💣', score: -10, coins: -5, isBomb: true }
+    ];
+    const item = targets[Math.floor(Math.random() * targets.length)];
+    const el = document.createElement('div');
+    el.className = 'falling-target'; el.textContent = item.emoji;
+
+    const stageRect = miniGameStage.getBoundingClientRect();
+    const startX = 35 + Math.random() * (stageRect.width - 70);
+    el.style.left = `${startX}px`; el.style.top = `30px`;
+
+    let posY = 30; const speed = 2.5 + Math.random() * 2.5;
+    const fallTimer = setInterval(() => {
+      if (!miniGameActive) { clearInterval(fallTimer); el.remove(); return; }
+      posY += speed; el.style.top = `${posY}px`;
+      if (posY > stageRect.height - 40) { clearInterval(fallTimer); el.remove(); }
+    }, 20);
+
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); clearInterval(fallTimer); el.remove();
+      if (item.isBomb) {
+        SoundFX.bonk(); vibrate(80);
+        gameScore = Math.max(0, gameScore - 10);
+        showToast('Boom! Bomb phoot gaya! 💥');
+      } else {
+        SoundFX.coin(); vibrate(30);
+        gameScore += item.score; gameCoinsEarned += item.coins;
+      }
+      scoreEl.textContent = gameScore;
+      earnedCoinsEl.textContent = gameCoinsEarned;
+    });
+
+    miniGameStage.appendChild(el);
+  }
+
+  function endMiniGame() {
+    miniGameActive = false;
+    clearInterval(gameInterval); clearInterval(spawnInterval);
+    document.querySelectorAll('.falling-target').forEach(el => el.remove());
+    if (gameCoinsEarned > 0) {
+      state.coins += gameCoinsEarned; updateUI();
+      showToast(`Shaandaar! +${gameCoinsEarned} Coins jeete! 🪙`);
+    }
+    gameStartOverlay.style.display = 'flex';
+  }
+
+  // START
+  setTimeout(() => {
+    showCatSpeech('Namaste! Main hoon aapka Talking Tom! Mere sath khelo! 😸❤️', 3500);
+    updateUI();
+  }, 600);
+})();
+</script>
+</body>
+</html>

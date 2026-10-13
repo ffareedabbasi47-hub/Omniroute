@@ -8,6 +8,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -82,7 +88,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -376,7 +384,7 @@ fun ChatScreen(
                             if (ui.streaming) {
                                 item(key = "streaming") { StreamingBubble(ui.partial, mode, ui.status) }
                             }
-                            items(messages.reversed(), key = { it.id }) { m ->
+                            items(messages.reversed().distinctBy { it.id }, key = { it.id }) { m ->
                                 MessageBubble(
                                     m = m,
                                     attachments = attachments[m.id].orEmpty(),
@@ -644,12 +652,110 @@ private fun LinkRow(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun AssistantAvatar() {
+private fun AssistantAvatar(isGenerating: Boolean = false) {
+    val ex = LocalOmni.current
+    val infiniteTransition = rememberInfiniteTransition(label = "avatar")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2800, easing = LinearEasing)
+        ),
+        label = "rotation"
+    )
+
     Box(
-        Modifier.size(28.dp).clip(CircleShape).background(LocalOmni.current.accent),
+        modifier = Modifier
+            .size(32.dp)
+            .then(
+                if (isGenerating) {
+                    Modifier.border(
+                        width = 2.dp,
+                        brush = Brush.sweepGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary,
+                                MaterialTheme.colorScheme.secondary,
+                                MaterialTheme.colorScheme.primary
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+                } else Modifier
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+        Box(
+            Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(ex.accent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .size(16.dp)
+                    .then(if (isGenerating) Modifier.graphicsLayer(rotationZ = rotation) else Modifier)
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveStageHeader(status: String) {
+    val infiniteTransition = rememberInfiniteTransition(label = "stage")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmer"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.primary.copy(alpha = shimmerAlpha),
+                RoundedCornerShape(12.dp)
+            )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = shimmerAlpha))
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    text = "Live AI Generation in progress...",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            TypingDots()
+        }
     }
 }
 
@@ -657,7 +763,7 @@ private fun AssistantAvatar() {
 private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
     val ex = LocalOmni.current
     Row(Modifier.fillMaxWidth()) {
-        AssistantAvatar()
+        AssistantAvatar(isGenerating = true)
         Spacer(Modifier.width(8.dp))
         Box(
             Modifier
@@ -668,26 +774,38 @@ private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
         ) {
             Column {
                 if (status != null) {
-                    Row(
-                        modifier = Modifier
-                            .padding(bottom = 8.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = status,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+                    LiveStageHeader(status)
                 }
                 if (partial.isNotEmpty()) {
                     MarkdownView(partial)
+                    Row(
+                        modifier = Modifier.padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TypingDots()
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Writing code & files...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 } else if (mode == ChatMode.CHAT) {
-                    TypingDots()
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            TypingDots()
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Thinking & preparing files...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 } else {
                     Column {
                         TypingDots()
