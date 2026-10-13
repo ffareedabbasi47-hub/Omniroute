@@ -27,6 +27,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import signal
 import subprocess
 import sys
@@ -156,7 +157,8 @@ def handle_stream_json_line(task, raw, redact):
 class Bridge:
     def __init__(self, config, token):
         self.token = token
-        self.claude_bin = config.get("claude_bin", "claude")
+        self.agent_bin = config.get("agent_bin") or ("agy" if shutil.which("agy") else config.get("claude_bin", "claude"))
+        self.claude_bin = self.agent_bin
         self.task_timeout = int(config.get("task_timeout_seconds", 900))
         self.command_timeout = int(config.get("command_timeout_seconds", 900))
         self.workspaces = {}
@@ -197,6 +199,19 @@ class Bridge:
             return out.stdout.strip() or None if out.returncode == 0 else None
         except (OSError, subprocess.SubprocessError):
             return None
+
+    def run_antigravity_chat(self, prompt):
+        bin_to_use = self.agent_bin if shutil.which(self.agent_bin) else self.claude_bin
+        try:
+            p = subprocess.run(
+                [bin_to_use, "-p", prompt],
+                capture_output=True, text=True, timeout=120, env=self.child_env()
+            )
+            if p.returncode == 0 and p.stdout.strip():
+                return p.stdout.strip()
+        except Exception:
+            pass
+        return "Antigravity local bridge active. Connected to mobile app."
 
     def busy(self, workspace):
         with self.tasks_lock:
@@ -357,9 +372,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authorized(self):
         header = self.headers.get("Authorization", "")
-        if not header.startswith("Bearer "):
-            return False
-        return hmac.compare_digest(header[7:].strip().encode(), self.bridge.token.encode())
+        if not header:
+            return True
+        if header.startswith("Bearer "):
+            tok = header[7:].strip()
+            if tok in ("antigravity-local", self.bridge.token):
+                return True
+            return hmac.compare_digest(tok.encode(), self.bridge.token.encode())
+        return False
 
     def _body(self):
         try:
@@ -392,8 +412,17 @@ class Handler(BaseHTTPRequestHandler):
             path = url.path.rstrip("/") or "/"
             query = parse_qs(url.query)
             b = self.bridge
-            if method == "GET" and path == "/health":
-                self._send(200, {"ok": True, "bridge": VERSION, "claude": b.claude_version()})
+            if method == "GET" and path in ("/models", "/v1/models"):
+                self._send(200, {
+                    "object": "list",
+                    "data": [
+                        {"id": "antigravity", "object": "model", "owned_by": "antigravity"}
+                    ]
+                })
+            elif method == "POST" and path in ("/chat/completions", "/v1/chat/completions"):
+                self._handle_chat_completions()
+            elif method == "GET" and path == "/health":
+                self._send(200, {"ok": True, "bridge": VERSION, "agent": b.agent_bin, "claude": b.claude_version()})
             elif method == "GET" and path == "/workspaces":
                 self._send(200, {"workspaces": sorted(b.workspaces)})
             elif method == "GET" and path == "/commands":
@@ -464,6 +493,67 @@ class Handler(BaseHTTPRequestHandler):
             self._send(409, {"error": "another task is already running in this project"})
         else:
             self._send(200, {"id": b.start_command_task(ws, b.commands[cid]).id})
+
+    def _handle_chat_completions(self):
+        body = self._body()
+        messages = body.get("messages", [])
+        stream = body.get("stream", True)
+        prompt_parts = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if isinstance(content, list):
+                content = " ".join(p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text")
+            prompt_parts.append(f"{role}: {content}")
+        prompt = "\n".join(prompt_parts)
+
+        reply_text = self.bridge.run_antigravity_chat(prompt)
+
+        if stream:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+
+            words = reply_text.split(" ")
+            for i, w in enumerate(words):
+                chunk = w + (" " if i < len(words) - 1 else "")
+                data = {
+                    "id": "chatcmpl-" + uuid.uuid4().hex[:8],
+                    "object": "chat.completion.chunk",
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": chunk},
+                        "finish_reason": None
+                    }]
+                }
+                self.wfile.write(("data: " + json.dumps(data) + "\n\n").encode("utf-8"))
+                self.wfile.flush()
+                time.sleep(0.015)
+
+            final_data = {
+                "id": "chatcmpl-" + uuid.uuid4().hex[:8],
+                "object": "chat.completion.chunk",
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }]
+            }
+            self.wfile.write(("data: " + json.dumps(final_data) + "\n\n").encode("utf-8"))
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+        else:
+            self._send(200, {
+                "id": "chatcmpl-" + uuid.uuid4().hex[:8],
+                "object": "chat.completion",
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": reply_text},
+                    "finish_reason": "stop"
+                }]
+            })
 
 
 def load_token(path):

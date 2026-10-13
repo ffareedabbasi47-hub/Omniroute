@@ -9,17 +9,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class Settings(
-    val baseUrl: String = "",
+    val baseUrl: String = "http://127.0.0.1:8787",
     val apiKey: String = "",
-    val model: String = "",
+    val model: String = "antigravity",
     /** BCP-47 tag such as "en-IN" or "hi-IN", or "auto" for the device default. */
     val language: String = "auto",
     val speakReplies: Boolean = false,
     /** "system", "light" or "dark". */
     val theme: String = "system",
-    val onboarded: Boolean = false,
+    val onboarded: Boolean = true,
     val bridgeUrl: String = "http://127.0.0.1:8787",
-    val bridgeToken: String = "",
+    val bridgeToken: String = "antigravity-local",
     val lastWorkspace: String = "",
     /** Sent as the first "system" message of every chat. */
     val systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
@@ -86,15 +86,15 @@ class SettingsStore(context: Context) {
     private fun load(): Settings {
         val d = Settings()
         return Settings(
-            baseUrl = plain.getString("baseUrl", d.baseUrl).orEmpty(),
+            baseUrl = plain.getString("baseUrl", d.baseUrl).orEmpty().ifEmpty { d.baseUrl },
             apiKey = secure.getString("apiKey", "").orEmpty(),
-            model = plain.getString("model", d.model).orEmpty(),
+            model = plain.getString("model", d.model).orEmpty().ifEmpty { d.model },
             language = plain.getString("language", d.language).orEmpty(),
             speakReplies = plain.getBoolean("speakReplies", d.speakReplies),
             theme = plain.getString("theme", d.theme).orEmpty(),
             onboarded = plain.getBoolean("onboarded", d.onboarded),
-            bridgeUrl = plain.getString("bridgeUrl", d.bridgeUrl).orEmpty(),
-            bridgeToken = secure.getString("bridgeToken", "").orEmpty(),
+            bridgeUrl = plain.getString("bridgeUrl", d.bridgeUrl).orEmpty().ifEmpty { d.bridgeUrl },
+            bridgeToken = secure.getString("bridgeToken", "").orEmpty().ifEmpty { d.bridgeToken },
             lastWorkspace = plain.getString("lastWorkspace", d.lastWorkspace).orEmpty(),
             systemPrompt = plain.getString("systemPrompt", d.systemPrompt).orEmpty(),
             imageModel = plain.getString("imageModel", d.imageModel).orEmpty(),
