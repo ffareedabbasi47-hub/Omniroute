@@ -288,11 +288,22 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 
 fun decodeSampled(path: String, maxEdge: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, bounds)
+    try {
+        BitmapFactory.decodeFile(path, bounds)
+    } catch (_: Throwable) {
+        return null
+    }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
     var sample = 1
     while (bounds.outWidth / sample > maxEdge * 2 || bounds.outHeight / sample > maxEdge * 2) sample *= 2
-    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+    return try {
+        BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        })
+    } catch (_: Throwable) {
+        null
+    }
 }
 
 /** Decodes an image file off the main thread; null while loading or if it can't be read. */
@@ -305,7 +316,7 @@ fun rememberBitmap(path: String?, maxEdge: Int): ImageBitmap? {
             withContext(Dispatchers.IO) {
                 try {
                     decodeSampled(path, maxEdge)?.asImageBitmap()
-                } catch (e: Exception) {
+                } catch (_: Throwable) {
                     null
                 }
             }

@@ -75,10 +75,18 @@ class AttachmentStore(context: Context) {
         }
     }
 
+    var lastCameraFile: File? = null
+        private set
+    var lastCameraUri: Uri? = null
+        private set
+
     fun newCameraUri(): Uri {
         val dir = File(ctx.cacheDir, "camera").apply { mkdirs() }
         val file = File.createTempFile("capture_", ".jpg", dir)
-        return FileProvider.getUriForFile(ctx, authority, file)
+        lastCameraFile = file
+        val uri = FileProvider.getUriForFile(ctx, authority, file)
+        lastCameraUri = uri
+        return uri
     }
 
     fun clearCameraCache() {
@@ -113,11 +121,18 @@ class AttachmentStore(context: Context) {
             ?: throw AttachException("Couldn't open \"$name\".")
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw AttachException("\"$name\" isn't a readable image.")
         var sample = 1
-        val limit = AttachmentRules.MAX_IMAGE_EDGE * 2
+        val limit = AttachmentRules.MAX_IMAGE_EDGE
         while (bounds.outWidth / sample > limit || bounds.outHeight / sample > limit) sample *= 2
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        val decoded = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-            ?: throw AttachException("\"$name\" isn't a readable image.")
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        val decoded = try {
+            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+        } catch (_: Throwable) {
+            null
+        } ?: throw AttachException("\"$name\" isn't a readable image.")
+
         val upright = rotateByExif(uri, decoded)
         val flat = flattenOnWhite(upright)
         val scaled = scaleDown(flat, AttachmentRules.MAX_IMAGE_EDGE)
@@ -129,10 +144,13 @@ class AttachmentStore(context: Context) {
             FileOutputStream(file).use { scaled.compress(Bitmap.CompressFormat.JPEG, 85, it) }
             val small = scaleDown(scaled, 320)
             FileOutputStream(thumb).use { small.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+            if (small !== scaled) small.recycle()
         } catch (e: IOException) {
             file.delete()
             thumb.delete()
             throw AttachException("Couldn't save \"$name\" (storage full?).")
+        } finally {
+            scaled.recycle()
         }
         return DraftAttachment(id, "image", name, "image/jpeg", file.path, thumb.path, file.length())
     }
@@ -222,6 +240,7 @@ class AttachmentStore(context: Context) {
         val id = UUID.randomUUID().toString()
         val ext = name.substringAfterLast('.', "jpg").lowercase().filter { it.isLetterOrDigit() }.ifEmpty { "jpg" }
         val file = File(root, "$id.$ext")
+        val thumbFile = File(root, "$id-thumb.jpg")
         try {
             val input = ctx.contentResolver.openInputStream(uri) ?: throw AttachException("Couldn't open \"$name\".")
             input.use { src ->
@@ -229,15 +248,35 @@ class AttachmentStore(context: Context) {
                     src.copyTo(out)
                 }
             }
+            try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.path, bounds)
+                if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                    var s = 1
+                    while (bounds.outWidth / s > 320 || bounds.outHeight / s > 320) s *= 2
+                    val thumbBmp = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply {
+                        inSampleSize = s
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    })
+                    if (thumbBmp != null) {
+                        FileOutputStream(thumbFile).use { thumbBmp.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+                        thumbBmp.recycle()
+                    }
+                }
+            } catch (_: Throwable) {
+            }
         } catch (e: AttachException) {
             file.delete()
+            thumbFile.delete()
             throw e
         } catch (e: IOException) {
             file.delete()
+            thumbFile.delete()
             throw AttachException("Couldn't read \"$name\".")
         }
         val storedMime = if (mime.startsWith("image/")) mime else "image/jpeg"
-        return DraftAttachment(id, "image", name, storedMime, file.path, file.path, file.length(), null)
+        val thumbPath = if (thumbFile.exists() && thumbFile.length() > 0) thumbFile.path else file.path
+        return DraftAttachment(id, "image", name, storedMime, file.path, thumbPath, file.length(), null)
     }
 
     private fun rotateByExif(uri: Uri, bmp: Bitmap): Bitmap {
@@ -248,6 +287,9 @@ class AttachmentStore(context: Context) {
         } catch (_: Throwable) {
             ExifInterface.ORIENTATION_NORMAL
         }
+        if (orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED) {
+            return bmp
+        }
         val m = Matrix()
         when (orientation) {
             ExifInterface.ORIENTATION_ROTATE_90 -> m.postRotate(90f)
@@ -257,11 +299,15 @@ class AttachmentStore(context: Context) {
             ExifInterface.ORIENTATION_FLIP_VERTICAL -> m.postScale(1f, -1f)
             else -> return bmp
         }
-        return try {
+        val rotated = try {
             Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
         } catch (_: Throwable) {
             bmp
         }
+        if (rotated !== bmp) {
+            bmp.recycle()
+        }
+        return rotated
     }
 
     private fun flattenOnWhite(bmp: Bitmap): Bitmap {
@@ -270,6 +316,7 @@ class AttachmentStore(context: Context) {
         val canvas = Canvas(out)
         canvas.drawColor(Color.WHITE)
         canvas.drawBitmap(bmp, 0f, 0f, null)
+        bmp.recycle()
         return out
     }
 
@@ -279,7 +326,11 @@ class AttachmentStore(context: Context) {
         val ratio = maxEdge.toFloat() / longest
         val w = maxOf(1, (bmp.width * ratio).toInt())
         val h = maxOf(1, (bmp.height * ratio).toInt())
-        return Bitmap.createScaledBitmap(bmp, w, h, true)
+        val scaled = Bitmap.createScaledBitmap(bmp, w, h, true)
+        if (scaled !== bmp) {
+            bmp.recycle()
+        }
+        return scaled
     }
 
     // ---- Storage management ---------------------------------------------------------------
@@ -328,7 +379,8 @@ class AttachmentStore(context: Context) {
             val imgMime = if (a.mime.startsWith("image/")) a.mime else "image/jpeg"
             val file = File(a.path)
             return@withContext if (file.exists() && file.length() > 0) {
-                ApiContribution("", listOf(ApiPart.Image(dataUrl(imgMime, file))))
+                val sendFile = if (file.length() > 1_500_000L) compressForApi(file) else file
+                ApiContribution("", listOf(ApiPart.Image(dataUrl(imgMime, sendFile))))
             } else {
                 ApiContribution("[Image attachment ${a.name} is missing or empty]", emptyList())
             }
@@ -362,6 +414,29 @@ class AttachmentStore(context: Context) {
                     }
                 }
             }
+        }
+    }
+
+    private fun compressForApi(source: File): File {
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(source.path, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return source
+            var sample = 1
+            while (bounds.outWidth / sample > 1280 || bounds.outHeight / sample > 1280) sample *= 2
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            val bmp = BitmapFactory.decodeFile(source.path, opts) ?: return source
+            val outFile = File(ctx.cacheDir, "api_send_${UUID.randomUUID().toString().take(8)}.jpg")
+            FileOutputStream(outFile).use {
+                bmp.compress(Bitmap.CompressFormat.JPEG, 82, it)
+            }
+            bmp.recycle()
+            if (outFile.exists() && outFile.length() > 0) outFile else source
+        } catch (_: Throwable) {
+            source
         }
     }
 

@@ -181,8 +181,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     throw e
                 } catch (e: AttachException) {
                     notify(e.message.orEmpty())
-                } catch (e: Exception) {
-                    notify("Couldn't attach that item.")
+                } catch (t: Throwable) {
+                    notify("Couldn't attach photo: ${t.message ?: "memory limit"}")
                 }
             }
             _uiBase.update { it.copy(importing = false) }

@@ -524,7 +524,7 @@ class Bridge:
 
         try:
             add_res = run(["add", "-A"])
-            commit_res = run(["commit", "-m", "Fix camera photo upload, thinking tag leaks, and enable image/video generation with vision analysis"])
+            commit_res = run(["commit", "-m", "Fix camera photo capture, prevent Activity recreation drop, and add memory-safe image decoding"])
             push_res = run(["push", "origin", "main"])
             return {
                 "ok": push_res.returncode == 0,
@@ -657,6 +657,10 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(404, {"error": "unknown workspace"})
                     return
                 self._send(200, b.git_diff(ws))
+            elif method == "GET" and path == "/list-files":
+                ui_dir = os.path.expanduser("~/OmniAssistant/app/src/main/java/com/omni/assistant/ui")
+                files = os.listdir(ui_dir) if os.path.isdir(ui_dir) else []
+                self._send(200, {"files": files})
             elif method in ("GET", "POST") and path in ("/git/push", "/push"):
                 ws = (query.get("workspace") or ["OmniAssistant"])[0]
                 if ws not in b.workspaces:

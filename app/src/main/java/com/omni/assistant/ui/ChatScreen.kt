@@ -86,6 +86,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -168,7 +169,7 @@ fun ChatScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<AttachmentEntity?>(null) }
     var viewingDraft by remember { mutableStateOf<DraftAttachment?>(null) }
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraUriString by rememberSaveable { mutableStateOf<String?>(null) }
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(AttachmentRules.MAX_ATTACHMENTS_PER_MESSAGE)
@@ -177,9 +178,14 @@ fun ChatScreen(
         vm.addAttachments(uris)
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val u = cameraUri
-        if (ok && u != null) vm.addAttachments(listOf(u))
-        cameraUri = null
+        val savedUriStr = cameraUriString
+        val u = if (savedUriStr != null) Uri.parse(savedUriStr) else omni.attachments.lastCameraUri
+        val targetFile = omni.attachments.lastCameraFile
+        val hasBytes = targetFile?.exists() == true && targetFile.length() > 0
+        if ((ok || hasBytes) && u != null) {
+            vm.addAttachments(listOf(u))
+        }
+        cameraUriString = null
     }
 
     fun launchPhotos() {
@@ -201,7 +207,7 @@ fun ChatScreen(
     fun launchCamera() {
         try {
             val uri = omni.attachments.newCameraUri()
-            cameraUri = uri
+            cameraUriString = uri.toString()
             camera.launch(uri)
         } catch (e: Exception) {
             vm.notify("No camera app is available on this device.")

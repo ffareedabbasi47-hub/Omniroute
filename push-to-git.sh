@@ -8,7 +8,7 @@ echo "📦 Adding modified files to Git..."
 git add -A
 
 echo "📝 Committing changes..."
-git commit -m "Fix camera photo upload, thinking tag leaks, and enable image/video generation with vision analysis" || echo "No changes to commit or already committed."
+git commit -m "Fix camera photo capture, prevent Activity recreation drop, and add memory-safe image decoding" || echo "No changes to commit or already committed."
 
 echo "🚀 Pushing to GitHub (origin main)..."
 git push origin main
