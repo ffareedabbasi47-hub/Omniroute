@@ -203,7 +203,7 @@ fun ChatScreen(
         cameraUriString = uri.toString()
         try {
             camera.launch(uri)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             val captureIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
                 putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
                 clipData = ClipData.newRawUri("camera_capture", uri)
@@ -211,14 +211,14 @@ fun ChatScreen(
             }
             try {
                 fallbackCamera.launch(captureIntent)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 try {
                     fallbackCamera.launch(Intent.createChooser(captureIntent, "Take Photo"))
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                     try {
                         val stillIntent = Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
                         ctx.startActivity(stillIntent)
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
                         vm.notify("No camera app is available on this device.")
                     }
                 }
@@ -235,10 +235,10 @@ fun ChatScreen(
     fun launchPhotos() {
         try {
             photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             try {
                 filePicker.launch("image/*")
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 filePicker.launch("*/*")
             }
         }
@@ -1015,14 +1015,7 @@ private fun StreamingBubble(
                 val cleanStream = remember(partial) { FileExport.splitThinking(partial).cleanText }
                 if (cleanStream.isNotEmpty()) {
                     val lines = remember(cleanStream) { cleanStream.lines() }
-                    val displayPartial = remember(cleanStream) {
-                        if (lines.size > 60) {
-                            "… [Buffered ${lines.size - 45} lines above] …\n\n" + lines.takeLast(45).joinToString("\n")
-                        } else {
-                            cleanStream
-                        }
-                    }
-                    MarkdownView(displayPartial)
+                    MarkdownView(cleanStream)
                     Row(
                         modifier = Modifier.padding(top = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -1089,10 +1082,10 @@ private fun MessageBubble(
     }
     var showThinking by remember { mutableStateOf(false) }
     val codeFiles = remember(msgCleanContent) {
-        try { FileExport.extractCodeFiles(msgCleanContent) } catch (_: Exception) { emptyList() }
+        try { FileExport.extractCodeFiles(msgCleanContent) } catch (e: Exception) { emptyList() }
     }
     val playableHtml = remember(codeFiles) {
-        try { FileExport.findPlayableHtml(codeFiles) } catch (_: Exception) { null }
+        try { FileExport.findPlayableHtml(codeFiles) } catch (e: Exception) { null }
     }
 
     if (m.role == "user") {
@@ -1102,7 +1095,7 @@ private fun MessageBubble(
                 val fontScale = LocalFontSizeScale.current
                 Box(
                     Modifier
-                        .widthIn(max = (310 * fontScale).dp)
+                        .widthIn(max = (560 * fontScale).dp)
                         .clip(RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp))
                         .background(ex.userBubble)
                         .padding(horizontal = (14 * fontScale).dp, vertical = (10 * fontScale).dp)

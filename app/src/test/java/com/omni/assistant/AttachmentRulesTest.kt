@@ -54,7 +54,7 @@ class AttachmentRulesTest {
             assertEquals("image_url", content.getJSONObject(1).getString("type"))
             assertEquals("file", content.getJSONObject(2).getString("type"))
             assertEquals("hi", msgs.getJSONObject(1).getString("content"))
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             // Android stub JSONObject in host JVM unit tests without device/robolectric
         }
     }

@@ -61,7 +61,7 @@ class AttachmentStore(context: Context) {
                 if (size > AttachmentRules.MAX_IMAGE_SOURCE_BYTES) throw AttachException("\"$name\" is too large (max 50 MB).")
                 try {
                     importImage(uri, name)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                     importRawImage(uri, name, mime)
                 }
             }
@@ -478,7 +478,7 @@ class AttachmentStore(context: Context) {
         } finally {
             try {
                 r.release()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
         }
     }

@@ -93,13 +93,8 @@ private fun HeadingBlock(level: Int, text: String) {
 @Composable
 private fun ParagraphBlock(text: String) {
     val fontScale = LocalFontSizeScale.current
-    val lines = remember(text) { text.lines() }
-    val safeText = remember(text) {
-        if (lines.size > 200) lines.take(150).joinToString("\n") + "\n..."
-        else text
-    }
     Text(
-        text = formatInlineMarkdown(safeText),
+        text = formatInlineMarkdown(text),
         style = MaterialTheme.typography.bodyLarge.copy(
             fontSize = (15.5f * fontScale).sp,
             lineHeight = (22f * fontScale).sp
@@ -167,15 +162,14 @@ private fun CodeBlock(
         }
     }
 
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(true) }
     val lines = remember(content) { content.lines() }
-    val isHuge = lines.size > 100
+    val isHuge = lines.size > 120
     val displayContent = remember(content, expanded) {
-        if (isHuge && !expanded) {
+        if (!expanded) {
             lines.take(80).joinToString("\n")
         } else {
-            if (lines.size > 400) lines.take(400).joinToString("\n") + "\n\n... (Tap 'Save' or 'Download ZIP' for full code)"
-            else content
+            content
         }
     }
 
@@ -307,7 +301,7 @@ private fun CodeBlock(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (expanded) "▲ Collapse code" else "▼ Showing 80 of ${lines.size} lines • Tap to expand (or Save File)",
+                        text = if (expanded) "▲ Collapse code (showing all ${lines.size} lines)" else "▼ Expand code (showing 80 of ${lines.size} lines)",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary

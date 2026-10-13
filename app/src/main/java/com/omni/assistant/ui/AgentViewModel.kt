@@ -305,7 +305,7 @@ class AgentViewModel(app: Application) : AndroidViewModel(app) {
             if (finished == null) {
                 try {
                     bridge.cancel(taskId)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                 }
                 return BridgeTask("timeout", emptyList(), since, null, null)
             }
@@ -314,7 +314,7 @@ class AgentViewModel(app: Application) : AndroidViewModel(app) {
             withContext(NonCancellable) {
                 try {
                     bridge.cancel(taskId)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                 }
             }
             throw e

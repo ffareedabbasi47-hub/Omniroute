@@ -20,8 +20,7 @@ object MarkdownParser {
             val bulletRegex = Regex("^\\s*(?:([-*+])\\s+|(\\d+[.)])\\s+)(.+?)\\s*$")
 
             while (i < lines.size) {
-                val raw = lines[i]
-                val line = if (raw.length > 2000) raw.take(2000) + " …" else raw
+                val line = lines[i]
 
                 if (line.isBlank()) {
                     i++
@@ -45,15 +44,14 @@ object MarkdownParser {
                             fileName = header
                             language = header.substringAfterLast(".", "txt").lowercase()
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
                         language = "txt"
                     }
                     i++
 
                     val codeLines = mutableListOf<String>()
                     while (i < lines.size && !lines[i].trimStart().startsWith("```")) {
-                        val cRaw = lines[i]
-                        codeLines.add(if (cRaw.length > 2000) cRaw.take(2000) + " …" else cRaw)
+                        codeLines.add(lines[i])
                         i++
                     }
 
@@ -63,7 +61,7 @@ object MarkdownParser {
                     continue
                 }
 
-                val heading = try { headingRegex.matchEntire(line) } catch (_: Exception) { null }
+                val heading = try { headingRegex.matchEntire(line) } catch (e: Exception) { null }
                 if (heading != null) {
                     blocks.add(
                         MdBlock.Heading(
@@ -75,7 +73,7 @@ object MarkdownParser {
                     continue
                 }
 
-                val bullet = try { bulletRegex.matchEntire(line) } catch (_: Exception) { null }
+                val bullet = try { bulletRegex.matchEntire(line) } catch (e: Exception) { null }
                 if (bullet != null) {
                     val marker = bullet.groupValues[2].ifEmpty { "•" }
                     blocks.add(MdBlock.Bullet(marker, bullet.groupValues[3]))
@@ -87,11 +85,11 @@ object MarkdownParser {
                 while (i < lines.size && lines[i].isNotBlank()) {
                     val current = lines[i]
                     if (current.trimStart().startsWith("```") ||
-                        (try { headingRegex.matches(current) } catch (_: Exception) { false }) ||
-                        (try { bulletRegex.matches(current) } catch (_: Exception) { false })) {
+                        (try { headingRegex.matches(current) } catch (e: Exception) { false }) ||
+                        (try { bulletRegex.matches(current) } catch (e: Exception) { false })) {
                         break
                     }
-                    paragraph.add(if (current.length > 2000) current.take(2000) + " …" else current)
+                    paragraph.add(current)
                     i++
                 }
 
@@ -101,7 +99,7 @@ object MarkdownParser {
             }
 
             blocks
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             listOf(MdBlock.Paragraph(markdown))
         }
     }

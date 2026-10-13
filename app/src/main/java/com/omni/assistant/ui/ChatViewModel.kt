@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 data class ChatUi(
@@ -565,7 +566,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         tmp.delete()
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
             val displayNotice = if (cleaned.isNotEmpty()) {
                 "$cleaned\n\n🖼️ **Photo Generated & Ready:**"
