@@ -190,6 +190,8 @@ object FileExport {
         val thinking: String?,
         val cleanText: String,
         val stageSummary: String
+    )
+
     /**
      * Splits raw LLM response into thinking content and the clean user-facing response.
      * Supports <thinking>...</thinking> as well as unclosed <thinking> while streaming.
