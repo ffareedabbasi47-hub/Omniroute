@@ -98,6 +98,25 @@ class OmniApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Cockroach Main Looper Crash Shield: Completely stops UI thread crashes from killing the app
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            while (true) {
+                try {
+                    android.os.Looper.loop()
+                } catch (t: Throwable) {
+                    try {
+                        val file = java.io.File(filesDir, "last_crash.txt")
+                        val sw = java.io.StringWriter()
+                        t.printStackTrace(java.io.PrintWriter(sw))
+                        file.writeText("Time: ${System.currentTimeMillis()}\nShielded UI Crash:\n$sw")
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+
+        // Background Thread Crash Shield
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
@@ -107,7 +126,9 @@ class OmniApp : Application() {
                 file.writeText("Time: ${System.currentTimeMillis()}\nThread: ${thread.name}\n$sw")
             } catch (_: Throwable) {
             }
-            defaultHandler?.uncaughtException(thread, throwable)
+            if (throwable is OutOfMemoryError) {
+                defaultHandler?.uncaughtException(thread, throwable)
+            }
         }
         try {
             val field = android.database.CursorWindow::class.java.getDeclaredField("sCursorWindowSize")

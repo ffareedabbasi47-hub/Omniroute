@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,16 +73,23 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val messages: StateFlow<List<MessageEntity>> = _conversationId
-        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else dao.observeMessages(id) }
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else dao.observeMessages(id).catch { emit(emptyList()) }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val attachmentsByMessage: StateFlow<Map<Long, List<AttachmentEntity>>> = _conversationId
-        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else dao.observeAttachments(id) }
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else dao.observeAttachments(id).catch { emit(emptyList()) }
+        }
         .map { list -> list.groupBy { it.messageId } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val conversations: StateFlow<List<ConversationEntity>> = dao.observeConversations()
+        .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val title: StateFlow<String> = combine(_conversationId, conversations) { id, list ->
