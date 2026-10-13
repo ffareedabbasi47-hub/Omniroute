@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -227,13 +228,64 @@ fun ChatScreen(
                         },
                         "application/pdf"
                     )
+                    "zip" -> {
+                        val files = FileExport.extractCodeFiles(text)
+                        if (files.isEmpty()) {
+                            vm.notify("No code blocks found to zip.")
+                            return@launch
+                        }
+                        Triple("project.zip", FileExport.createZipArchive(files, "omni-project"), "application/zip")
+                    }
+                    "html" -> {
+                        val files = FileExport.extractCodeFiles(text)
+                        val playable = FileExport.findPlayableHtml(files) ?: text
+                        Triple("index.html", playable.toByteArray(Charsets.UTF_8), "text/html")
+                    }
                     "txt" -> Triple("reply.txt", FileExport.markdownToPlain(text).toByteArray(), "text/plain")
                     else -> Triple("reply.md", text.toByteArray(), "text/markdown")
                 }
                 val uri = omni.attachments.uriFor(omni.attachments.writeExport(name, bytes))
                 if (uri == null || !shareUris(ctx, listOf(uri), mime, name)) vm.notify("Couldn't create the file.")
             } catch (e: Exception) {
-                vm.notify("Couldn't create the file.")
+                vm.notify("Couldn't create the file: ${e.message}")
+            }
+        }
+    }
+
+    fun saveCodeFile(name: String, content: String) {
+        scope.launch {
+            try {
+                val file = omni.attachments.writeExport(name, content.toByteArray(Charsets.UTF_8))
+                val uri = omni.attachments.uriFor(file)
+                val ext = name.substringAfterLast(".", "txt")
+                val mime = FileExport.mimeFor(ext)
+                if (uri == null || !shareUris(ctx, listOf(uri), mime, name)) {
+                    vm.notify("File saved: $name")
+                }
+            } catch (e: Exception) {
+                vm.notify("Couldn't save file.")
+            }
+        }
+    }
+
+    fun runHtmlPreview(html: String) {
+        scope.launch {
+            try {
+                val file = omni.attachments.writeExport("preview.html", html.toByteArray(Charsets.UTF_8))
+                val uri = omni.attachments.uriFor(file)
+                if (uri != null) {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "text/html")
+                        clipData = ClipData.newRawUri("preview.html", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    ctx.startActivity(Intent.createChooser(intent, "Run in Browser / Game Preview"))
+                } else {
+                    vm.notify("Couldn't open preview.")
+                }
+            } catch (e: Exception) {
+                vm.notify("No browser app available to open preview.")
             }
         }
     }
@@ -327,6 +379,8 @@ fun ChatScreen(
                                     retryEnabled = !ui.streaming,
                                     onShare = { shareAttachments(attachments[m.id].orEmpty()) },
                                     onExport = { fmt -> exportReply(m.content, fmt) },
+                                    onSaveCode = ::saveCodeFile,
+                                    onRunHtml = ::runHtmlPreview,
                                     onOpenAttachment = { a ->
                                         if (a.kind == "file") openFile(a.path, a.mime, a.name) else viewing = a
                                     }
@@ -633,11 +687,16 @@ private fun MessageBubble(
     retryEnabled: Boolean,
     onShare: () -> Unit,
     onExport: (String) -> Unit,
+    onSaveCode: (String, String) -> Unit,
+    onRunHtml: (String) -> Unit,
     onOpenAttachment: (AttachmentEntity) -> Unit
 ) {
     val ex = LocalOmni.current
     val clipboard = LocalClipboardManager.current
     var exportMenu by remember { mutableStateOf(false) }
+    val codeFiles = remember(m.content) { FileExport.extractCodeFiles(m.content) }
+    val playableHtml = remember(codeFiles) { FileExport.findPlayableHtml(codeFiles) }
+
     if (m.role == "user") {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (attachments.isNotEmpty()) MessageAttachments(attachments, onOpenAttachment)
@@ -672,7 +731,40 @@ private fun MessageBubble(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
                     .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
-                if (m.content.isNotEmpty()) MarkdownView(m.content)
+                if (m.content.isNotEmpty()) {
+                    MarkdownView(
+                        text = m.content,
+                        onSaveCode = onSaveCode,
+                        onRunHtml = onRunHtml
+                    )
+                }
+
+                if (playableHtml != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .clickable { onRunHtml(playableHtml) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "▶ Play Game / Run in Browser",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
                 if (m.failed) {
                     Text(
                         m.error ?: "The reply failed.",
@@ -688,7 +780,7 @@ private fun MessageBubble(
                 }
             }
             if (!m.failed) {
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { clipboard.setText(AnnotatedString(m.content)) }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy reply", modifier = Modifier.size(20.dp))
                     }
@@ -697,12 +789,28 @@ private fun MessageBubble(
                             Icon(Icons.Default.Share, contentDescription = "Save or share generated file", modifier = Modifier.size(20.dp))
                         }
                     } else if (m.content.isNotBlank()) {
+                        if (codeFiles.isNotEmpty()) {
+                            IconButton(onClick = { onExport("zip") }) {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = "Download project as ZIP",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                         Box {
                             IconButton(onClick = { exportMenu = true }) {
-                                Icon(Icons.Default.Download, contentDescription = "Save reply as a file", modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.MoreVert, contentDescription = "Export reply options", modifier = Modifier.size(20.dp))
                             }
                             DropdownMenu(expanded = exportMenu, onDismissRequest = { exportMenu = false }) {
-                                DropdownMenuItem(text = { Text("PDF document") }, onClick = { exportMenu = false; onExport("pdf") })
+                                if (codeFiles.isNotEmpty()) {
+                                    DropdownMenuItem(text = { Text("📦 Project ZIP (.zip)") }, onClick = { exportMenu = false; onExport("zip") })
+                                }
+                                if (playableHtml != null) {
+                                    DropdownMenuItem(text = { Text("🌐 Web Page (.html)") }, onClick = { exportMenu = false; onExport("html") })
+                                }
+                                DropdownMenuItem(text = { Text("PDF document (.pdf)") }, onClick = { exportMenu = false; onExport("pdf") })
                                 DropdownMenuItem(text = { Text("Markdown (.md)") }, onClick = { exportMenu = false; onExport("md") })
                                 DropdownMenuItem(text = { Text("Plain text (.txt)") }, onClick = { exportMenu = false; onExport("txt") })
                             }

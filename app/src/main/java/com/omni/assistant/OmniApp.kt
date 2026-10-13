@@ -97,6 +97,12 @@ class OmniApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        try {
+            val field = android.database.CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
+            field.isAccessible = true
+            field.set(null, 100 * 1024 * 1024) // 100 MB cursor window to prevent big code crashes
+        } catch (_: Throwable) {
+        }
         voice // pre-warm TTS for instant vocal replies
     }
 }

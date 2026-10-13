@@ -124,4 +124,99 @@ object FileExport {
         doc.close()
         return out.toByteArray()
     }
+
+    data class CodeFile(val name: String, val lang: String, val content: String)
+
+    /** Extracts all code blocks from markdown into distinct files. */
+    fun extractCodeFiles(markdown: String): List<CodeFile> {
+        val lines = markdown.lines()
+        val files = mutableListOf<CodeFile>()
+        var inBlock = false
+        var currentLang = ""
+        var currentFileName: String? = null
+        val currentContent = StringBuilder()
+        var lastTextBefore = ""
+
+        for (line in lines) {
+            val trimmed = line.trimStart()
+            if (trimmed.startsWith("```")) {
+                if (inBlock) {
+                    val finalName = currentFileName ?: fileNameFor(currentLang, lastTextBefore, files.size)
+                    files.add(CodeFile(finalName, currentLang, currentContent.toString()))
+                    inBlock = false
+                    currentContent.clear()
+                    currentFileName = null
+                    currentLang = ""
+                } else {
+                    inBlock = true
+                    val header = trimmed.removePrefix("```").trim()
+                    if (header.contains(":")) {
+                        val parts = header.split(":", limit = 2)
+                        currentLang = parts[0].trim()
+                        currentFileName = parts[1].trim()
+                    } else if (header.contains(" ")) {
+                        val parts = header.split(" ", limit = 2)
+                        currentLang = parts[0].trim()
+                        currentFileName = parts[1].trim()
+                    } else {
+                        currentLang = header
+                        if (header.contains(".")) {
+                            currentFileName = header
+                        }
+                    }
+                }
+            } else if (inBlock) {
+                if (currentContent.isNotEmpty()) currentContent.append('\n')
+                currentContent.append(line)
+            } else {
+                if (line.isNotBlank()) lastTextBefore = line
+            }
+        }
+        return files
+    }
+
+    /** Bundles code files into a clean .zip archive. */
+    fun createZipArchive(files: List<CodeFile>, projectName: String = "project"): ByteArray {
+        val baos = ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(baos).use { zip ->
+            for (f in files) {
+                val entry = java.util.zip.ZipEntry(f.name)
+                zip.putNextEntry(entry)
+                zip.write(f.content.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+            if (files.none { it.name.equals("README.md", ignoreCase = true) }) {
+                val readme = "# $projectName\n\nGenerated with Antigravity OmniAssistant.\n\nIncluded files:\n" +
+                    files.joinToString("\n") { "- `${it.name}` (${it.lang})" }
+                val entry = java.util.zip.ZipEntry("README.md")
+                zip.putNextEntry(entry)
+                zip.write(readme.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+        }
+        return baos.toByteArray()
+    }
+
+    /** Combines index.html with any companion CSS/JS into a single runnable HTML file for instant play. */
+    fun findPlayableHtml(files: List<CodeFile>): String? {
+        val htmlFile = files.firstOrNull { it.name.endsWith(".html", ignoreCase = true) } ?: return null
+        var html = htmlFile.content
+        val cssFile = files.firstOrNull { it.name.endsWith(".css", ignoreCase = true) }
+        val jsFile = files.firstOrNull { it.name.endsWith(".js", ignoreCase = true) }
+        if (cssFile != null && !html.contains(cssFile.content.take(30))) {
+            html = if (html.contains("</head>", ignoreCase = true)) {
+                html.replace(Regex("(?i)</head>"), "<style>\n${cssFile.content}\n</style>\n</head>")
+            } else {
+                "<style>\n${cssFile.content}\n</style>\n" + html
+            }
+        }
+        if (jsFile != null && !html.contains(jsFile.content.take(30))) {
+            html = if (html.contains("</body>", ignoreCase = true)) {
+                html.replace(Regex("(?i)</body>"), "<script>\n${jsFile.content}\n</script>\n</body>")
+            } else {
+                html + "\n<script>\n${jsFile.content}\n</script>"
+            }
+        }
+        return html
+    }
 }

@@ -38,11 +38,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 VERSION = "1.0"
-MAX_BODY = 64 * 1024
-MAX_PROMPT = 20000
-MAX_LINES = 5000
-MAX_LINE_LEN = 2000
-MAX_DIFF = 200_000
+MAX_BODY = 100 * 1024 * 1024
+MAX_PROMPT = 10_000_000
+MAX_LINES = 100_000
+MAX_LINE_LEN = 500_000
+MAX_DIFF = 10_000_000
 
 PLAN_TOOLS = "Read,Glob,Grep"
 EDIT_TOOLS = "Read,Glob,Grep,Edit,Write"
@@ -202,12 +202,21 @@ class Bridge:
 
     def run_antigravity_chat(self, prompt):
         bin_to_use = self.agent_bin if shutil.which(self.agent_bin) else self.claude_bin
+        system_hint = (
+            "You are Antigravity AI assistant. "
+            "When the user asks you to create an app, game, or software, provide clean, complete, working code. "
+            "Always label code blocks with their exact filename (e.g. ```html:index.html, ```javascript:game.js, ```css:style.css). "
+            "For web apps and HTML5 games, ensure index.html is fully standalone and runnable so the user can play it directly.\n\n"
+        )
+        full_prompt = system_hint + prompt
         try:
             p = subprocess.run(
-                [bin_to_use, "-p", prompt],
-                capture_output=True, text=True, timeout=120, env=self.child_env()
+                [bin_to_use, "-p", full_prompt],
+                capture_output=True, text=True, timeout=600, env=self.child_env()
             )
             if p.returncode == 0 and p.stdout.strip():
+                return p.stdout.strip()
+            elif p.stdout.strip():
                 return p.stdout.strip()
         except Exception:
             pass

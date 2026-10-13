@@ -38,7 +38,7 @@ object TermuxBridgeManager {
                     putExtra(EXTRA_BACKGROUND, true)
                 }
                 context.sendBroadcast(broadcastIntent)
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
             }
         }
     }
@@ -50,9 +50,10 @@ object TermuxBridgeManager {
         try {
             val launchIntent = context.packageManager.getLaunchIntentForPackage("com.termux")
             if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 }

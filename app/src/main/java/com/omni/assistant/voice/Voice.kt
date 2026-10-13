@@ -180,7 +180,8 @@ class VoiceController(context: Context) {
     // ---- Spoken output --------------------------------------------------------------------
 
     private fun cleanMarkdownForSpeech(input: String): String {
-        return input
+        val safe = if (input.length > 5000) input.take(5000) else input
+        return safe
             .replace(Regex("```[\\s\\S]*?```"), " code snippet ")
             .replace(Regex("`([^`]+)`"), "$1")
             .replace(Regex("\\[([^\\]]+)\\]\\([^\\)]+\\)"), "$1")

@@ -2,7 +2,7 @@ package com.omni.assistant.ui
 
 sealed class MdBlock {
     data class Paragraph(val text: String) : MdBlock()
-    data class Code(val language: String, val content: String) : MdBlock()
+    data class Code(val language: String, val content: String, val fileName: String? = null) : MdBlock()
     data class Heading(val level: Int, val text: String) : MdBlock()
     data class Bullet(val marker: String, val text: String) : MdBlock()
 }
@@ -26,19 +26,32 @@ object MarkdownParser {
             }
 
             if (line.trimStart().startsWith("```")) {
-                val language = line.trim().removePrefix("```").trim()
+                val header = line.trim().removePrefix("```").trim()
+                var language = header
+                var fileName: String? = null
+                if (header.contains(":")) {
+                    val parts = header.split(":", limit = 2)
+                    language = parts[0].trim()
+                    fileName = parts[1].trim()
+                } else if (header.contains(" ")) {
+                    val parts = header.split(" ", limit = 2)
+                    language = parts[0].trim()
+                    fileName = parts[1].trim()
+                } else if (header.contains(".")) {
+                    fileName = header
+                    language = header.substringAfterLast(".").lowercase()
+                }
                 i++
 
                 val codeLines = mutableListOf<String>()
-                while (i < lines.size &&
-                    !lines[i].trimStart().startsWith("```")) {
+                while (i < lines.size && !lines[i].trimStart().startsWith("```")) {
                     codeLines.add(lines[i])
                     i++
                 }
 
                 if (i < lines.size) i++
 
-                blocks.add(MdBlock.Code(language, codeLines.joinToString("\n")))
+                blocks.add(MdBlock.Code(language, codeLines.joinToString("\n"), fileName))
                 continue
             }
 

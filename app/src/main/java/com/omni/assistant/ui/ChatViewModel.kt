@@ -89,6 +89,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         store.clearCameraCache()
+        viewModelScope.launch {
+            try {
+                dao.observeConversations().collect { list ->
+                    if (_conversationId.value == null && list.isNotEmpty()) {
+                        _conversationId.value = list.first().id
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun setDraft(text: String) {

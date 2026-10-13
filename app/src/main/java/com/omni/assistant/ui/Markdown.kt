@@ -17,7 +17,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -42,7 +45,12 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 @Composable
-fun MarkdownView(text: String, modifier: Modifier = Modifier) {
+fun MarkdownView(
+    text: String,
+    modifier: Modifier = Modifier,
+    onSaveCode: ((fileName: String, content: String) -> Unit)? = null,
+    onRunHtml: ((html: String) -> Unit)? = null
+) {
     val blocks = remember(text) { MarkdownParser.parse(text) }
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -53,7 +61,13 @@ fun MarkdownView(text: String, modifier: Modifier = Modifier) {
                 is MdBlock.Heading -> HeadingBlock(block.level, block.text)
                 is MdBlock.Paragraph -> ParagraphBlock(block.text)
                 is MdBlock.Bullet -> BulletBlock(block.marker, block.text)
-                is MdBlock.Code -> CodeBlock(block.language, block.content)
+                is MdBlock.Code -> CodeBlock(
+                    language = block.language,
+                    content = block.content,
+                    fileName = block.fileName,
+                    onSaveCode = onSaveCode,
+                    onRunHtml = onRunHtml
+                )
             }
         }
     }
@@ -106,14 +120,33 @@ private fun BulletBlock(marker: String, text: String) {
 }
 
 @Composable
-private fun CodeBlock(language: String, content: String) {
+private fun CodeBlock(
+    language: String,
+    content: String,
+    fileName: String? = null,
+    onSaveCode: ((fileName: String, content: String) -> Unit)? = null,
+    onRunHtml: ((html: String) -> Unit)? = null
+) {
     val clipboard = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(false) }
+
+    val resolvedName = fileName ?: run {
+        val ext = com.omni.assistant.data.FileExport.extensionFor(language)
+        if (ext == "html") "index.html" else "file.$ext"
+    }
+    val isHtml = language.equals("html", ignoreCase = true) || resolvedName.endsWith(".html", ignoreCase = true)
 
     LaunchedEffect(copied) {
         if (copied) {
             delay(2000)
             copied = false
+        }
+    }
+    LaunchedEffect(saved) {
+        if (saved) {
+            delay(2000)
+            saved = false
         }
     }
 
@@ -134,31 +167,90 @@ private fun CodeBlock(language: String, content: String) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = language.ifBlank { "code" },
-                    style = MaterialTheme.typography.labelMedium,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Code,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = resolvedName,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        clipboard.setText(AnnotatedString(content))
-                        copied = true
-                    }
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(
-                        imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
-                        contentDescription = "Copy code",
-                        tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = if (copied) "Copied" else "Copy",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (isHtml && onRunHtml != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { onRunHtml(content) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Run / Preview Game",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text = "Run",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (onSaveCode != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable {
+                                onSaveCode(resolvedName, content)
+                                saved = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (saved) Icons.Default.Check else Icons.Default.Download,
+                                contentDescription = "Save file",
+                                tint = if (saved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text = if (saved) "Saved" else "Save",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (saved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            clipboard.setText(AnnotatedString(content))
+                            copied = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                            contentDescription = "Copy code",
+                            tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = if (copied) "Copied" else "Copy",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
             Box(
@@ -180,6 +272,9 @@ private fun CodeBlock(language: String, content: String) {
 }
 
 private fun formatInlineMarkdown(text: String): AnnotatedString {
+    if (text.length > 20000) {
+        return AnnotatedString(text)
+    }
     return buildAnnotatedString {
         val regex = Regex("(`[^`]+`)|(\\*\\*[^*]+\\*\\*)")
         var lastIdx = 0
