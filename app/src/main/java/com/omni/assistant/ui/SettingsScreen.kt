@@ -105,14 +105,14 @@ fun SettingsScreen(
                         }
                         val statusText = when (conn) {
                             is ConnState.Ok -> "Connected to Antigravity"
-                            is ConnState.Checking -> "Connecting to local bridge..."
-                            is ConnState.Unverified -> (conn as ConnState.Unverified).message
-                            is ConnState.Failed -> "Bridge not running: ${(conn as ConnState.Failed).message}"
-                            is ConnState.Unknown -> "Tap check to test connection"
+                            ConnState.Checking -> "Connecting to local bridge..."
+                            is ConnState.Unverified -> conn.message
+                            is ConnState.Failed -> "Bridge not running: ${conn.message}"
+                            ConnState.Unknown -> "Tap check to test connection"
                         }
                         val statusColor = when (conn) {
                             is ConnState.Ok -> MaterialTheme.colorScheme.primary
-                            is ConnState.Checking -> MaterialTheme.colorScheme.secondary
+                            ConnState.Checking -> MaterialTheme.colorScheme.secondary
                             is ConnState.Failed -> MaterialTheme.colorScheme.error
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
