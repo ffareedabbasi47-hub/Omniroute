@@ -129,7 +129,7 @@ fun downloadAttachment(context: Context, attachment: AttachmentEntity): Boolean 
         } else {
             saveToDownloadsFallback(context, src, safeName)
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
         saveToDownloadsFallback(context, src, attachment.name)
     }
 }
@@ -605,7 +605,7 @@ fun MessageAttachments(items: List<AttachmentEntity>, onOpen: (AttachmentEntity)
                                 }
                                 try {
                                     ctx.startActivity(intent)
-                                } catch (_: Exception) {
+                                } catch (e: Exception) {
                                     onOpen(a)
                                 }
                             } else {

@@ -36,7 +36,11 @@ jobs:
       - name: Build debug APK
         run: |
           set -o pipefail
-          gradle --no-daemon :app:assembleDebug --stacktrace 2>&1 | tee build.log
+          gradle --no-daemon :app:assembleDebug --stacktrace 2>&1 | tee build.log || {
+            echo "::error::Gradle assembleDebug failed!"
+            tail -n 250 build.log
+            exit 1
+          }
 
       - name: Upload build log
         if: always()
