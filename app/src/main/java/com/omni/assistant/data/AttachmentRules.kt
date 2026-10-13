@@ -2,16 +2,24 @@ package com.omni.assistant.data
 
 /** Pure (Android-free) rules about which attachments are accepted, so they can be unit-tested. */
 object AttachmentRules {
-    const val MAX_ATTACHMENTS_PER_MESSAGE = 6
-    const val MAX_FILE_BYTES = 10L * 1024 * 1024
-    const val MAX_IMAGE_SOURCE_BYTES = 40L * 1024 * 1024
-    const val MAX_TEXT_CHARS = 60_000
+    const val MAX_ATTACHMENTS_PER_MESSAGE = 10
+    const val MAX_FILE_BYTES = 50L * 1024 * 1024
+    const val MAX_IMAGE_SOURCE_BYTES = 50L * 1024 * 1024
+    const val MAX_TEXT_CHARS = 100_000
     const val MAX_IMAGE_EDGE = 1600
     const val MAX_FRAME_EDGE = 768
     const val MAX_VIDEO_FRAMES = 6
 
     /** How many most-recent attachment-bearing user messages are re-sent in full on each request. */
     const val RESEND_LAST_N_MESSAGES = 2
+
+    private val imageExtensions = setOf(
+        "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "svg", "ico", "tiff"
+    )
+
+    private val videoExtensions = setOf(
+        "mp4", "mkv", "webm", "avi", "mov", "3gp", "flv", "wmv", "m4v"
+    )
 
     private val textExtensions = setOf(
         "txt", "md", "markdown", "json", "csv", "tsv", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf",
@@ -25,21 +33,21 @@ object AttachmentRules {
         "application/yaml", "application/sql", "application/x-sh", "application/toml"
     )
 
-    /** Returns "image", "video", "pdf", "text", or null if the type is not supported. */
-    fun classify(name: String, mime: String): String? {
+    /** Returns "image", "video", "pdf", "text", or "file". Every file type is supported. */
+    fun classify(name: String, mime: String): String {
         val m = mime.lowercase()
         val ext = name.substringAfterLast('.', "").lowercase()
         return when {
-            m.startsWith("image/") -> "image"
-            m.startsWith("video/") -> "video"
+            m.startsWith("image/") || ext in imageExtensions -> "image"
+            m.startsWith("video/") || ext in videoExtensions -> "video"
             m == "application/pdf" || ext == "pdf" -> "pdf"
             m.startsWith("text/") || m in textMimes || ext in textExtensions -> "text"
-            else -> null
+            else -> "file"
         }
     }
 
     fun unsupportedMessage(name: String): String =
-        "\"$name\" isn't supported. You can attach images, videos, PDFs and text or code files."
+        "\"$name\" couldn't be loaded."
 
     fun formatBytes(bytes: Long): String = when {
         bytes < 1024 -> "$bytes B"

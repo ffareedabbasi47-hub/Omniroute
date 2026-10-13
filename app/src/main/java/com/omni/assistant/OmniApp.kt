@@ -94,6 +94,7 @@ class OmniApp : Application() {
     val connection: ConnectionMonitor by lazy { ConnectionMonitor(this, client, settings) }
     val voice: VoiceController by lazy { VoiceController(this) }
     val attachments: AttachmentStore by lazy { AttachmentStore(this) }
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()

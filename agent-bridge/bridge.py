@@ -516,8 +516,6 @@ class Handler(BaseHTTPRequestHandler):
             prompt_parts.append(f"{role}: {content}")
         prompt = "\n".join(prompt_parts)
 
-        reply_text = self.bridge.run_antigravity_chat(prompt)
-
         if stream:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -525,21 +523,52 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Connection", "keep-alive")
             self.end_headers()
 
-            words = reply_text.split(" ")
-            for i, w in enumerate(words):
-                chunk = w + (" " if i < len(words) - 1 else "")
+            def send_chunk(text):
                 data = {
                     "id": "chatcmpl-" + uuid.uuid4().hex[:8],
                     "object": "chat.completion.chunk",
                     "choices": [{
                         "index": 0,
-                        "delta": {"content": chunk},
+                        "delta": {"content": text},
                         "finish_reason": None
                     }]
                 }
                 self.wfile.write(("data: " + json.dumps(data) + "\n\n").encode("utf-8"))
                 self.wfile.flush()
-                time.sleep(0.015)
+
+            # Immediate status so connection stays alive and user sees progress
+            send_chunk("🧠 Thinking & planning...\n\n")
+
+            reply_text = self.bridge.run_antigravity_chat(prompt)
+
+            # Automatically create actual files in ~/OmniAssistant/generated/
+            try:
+                gen_dir = os.path.expanduser("~/OmniAssistant/generated")
+                os.makedirs(gen_dir, exist_ok=True)
+                code_pattern = re.compile(r"```([a-zA-Z0-9_\-.:]+)?\n([\s\S]*?)```")
+                matches = code_pattern.findall(reply_text)
+                saved_files = []
+                for header, code in matches:
+                    fname = None
+                    if ":" in header:
+                        fname = header.split(":", 1)[1].strip()
+                    elif "." in header:
+                        fname = header.strip()
+                    if fname:
+                        fpath = os.path.join(gen_dir, fname)
+                        with open(fpath, "w", encoding="utf-8") as f:
+                            f.write(code)
+                        saved_files.append(fname)
+                if saved_files:
+                    reply_text += "\n\n📁 **Files saved to device:** " + ", ".join(f"`~/OmniAssistant/generated/{f}`" for f in saved_files)
+            except Exception:
+                pass
+
+            words = reply_text.split(" ")
+            for i, w in enumerate(words):
+                chunk = w + (" " if i < len(words) - 1 else "")
+                send_chunk(chunk)
+                time.sleep(0.012)
 
             final_data = {
                 "id": "chatcmpl-" + uuid.uuid4().hex[:8],
@@ -554,6 +583,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         else:
+            reply_text = self.bridge.run_antigravity_chat(prompt)
             self._send(200, {
                 "id": "chatcmpl-" + uuid.uuid4().hex[:8],
                 "object": "chat.completion",

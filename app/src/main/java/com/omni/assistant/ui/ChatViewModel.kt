@@ -35,6 +35,7 @@ import kotlinx.coroutines.withContext
 data class ChatUi(
     val streaming: Boolean = false,
     val partial: String = "",
+    val status: String? = null,
     val error: String? = null,
     val listening: Boolean = false,
     val speaking: Boolean = false,
@@ -225,7 +226,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         omni.voice.stopSpeaking()
         if (mode == ChatMode.CHAT) _pending.value = emptyList()
         _ui.update { it.copy(streaming = true, partial = "", error = null, notice = null, speaking = false) }
-        job = viewModelScope.launch {
+        job = omni.appScope.launch {
             val now = System.currentTimeMillis()
             var cid = _conversationId.value
             if (cid == null) {
@@ -258,7 +259,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val cid = _conversationId.value ?: return
         if (_ui.value.streaming) return
         _ui.update { it.copy(streaming = true, partial = "", error = null, notice = null) }
-        job = viewModelScope.launch {
+        job = omni.appScope.launch {
             dao.deleteMessage(failedMessageId)
             val m = failedModes.remove(failedMessageId) ?: ChatMode.CHAT
             if (m == ChatMode.CHAT) {
@@ -384,7 +385,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun runGeneration(cid: Long) {
-        _ui.update { it.copy(streaming = true, partial = "", error = null) }
+        _ui.update { it.copy(streaming = true, partial = "", status = "🧠 Thinking & planning...", error = null) }
         val sb = StringBuilder()
         var hadParts = false
         try {
@@ -392,13 +393,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             hadParts = anyParts
             omni.client.streamChat(history).collect { chunk ->
                 sb.append(chunk)
-                _ui.update { it.copy(partial = sb.toString()) }
+                val currentText = sb.toString()
+                val liveStatus = extractLiveStatus(currentText)
+                _ui.update { it.copy(partial = currentText, status = liveStatus) }
             }
             val finalText = sb.toString()
             val now = System.currentTimeMillis()
             dao.insertMessage(MessageEntity(conversationId = cid, role = "assistant", content = finalText, createdAt = now))
             dao.touch(cid, now)
-            _ui.update { it.copy(streaming = false, partial = "") }
+            _ui.update { it.copy(streaming = false, partial = "", status = null) }
             omni.connection.markOk()
             if (omni.settings.current.speakReplies) speak(finalText)
         } catch (e: CancellationException) {
@@ -410,7 +413,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     dao.touch(cid, now)
                 }
-                _ui.update { it.copy(streaming = false, partial = "") }
+                _ui.update { it.copy(streaming = false, partial = "", status = null) }
             }
             throw e
         } catch (e: ApiException) {
@@ -418,6 +421,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             fail(cid, sb.toString(), ApiException(ApiException.Kind.CLIENT, "Unexpected error (${e.javaClass.simpleName})."), hadParts)
         }
+    }
+
+    private fun extractLiveStatus(text: String): String {
+        val lastLines = text.takeLast(1000).lines().filter { it.isNotBlank() }
+        for (line in lastLines.reversed()) {
+            val l = line.trim()
+            when {
+                l.contains("index.html", ignoreCase = true) -> return "🌐 Building index.html..."
+                l.contains("script.js", ignoreCase = true) || l.contains("game.js", ignoreCase = true) -> return "⚡ Writing game logic..."
+                l.contains("style.css", ignoreCase = true) -> return "🎨 Styling app (style.css)..."
+                l.contains("```html", ignoreCase = true) -> return "📄 Creating HTML structure..."
+                l.contains("```", ignoreCase = true) -> return "✏️ Writing code..."
+                l.contains("thinking", ignoreCase = true) || l.startsWith("<thinking>") -> return "🧠 Thinking..."
+                l.contains("creating", ignoreCase = true) -> return "📁 Creating files..."
+                l.contains("editing", ignoreCase = true) -> return "✏️ Editing files..."
+            }
+        }
+        return if (text.isBlank()) "🧠 Thinking & planning..." else "✏️ Writing files..."
     }
 
     private suspend fun fail(cid: Long, partial: String, e: ApiException, hadAttachments: Boolean) {
@@ -432,7 +453,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 createdAt = System.currentTimeMillis(), failed = true, error = msg
             )
         )
-        _ui.update { it.copy(streaming = false, partial = "") }
+        _ui.update { it.copy(streaming = false, partial = "", status = null) }
         if (e.kind == ApiException.Kind.NETWORK || e.kind == ApiException.Kind.TIMEOUT || e.kind == ApiException.Kind.AUTH) {
             omni.connection.markFailed(e.message ?: msg)
         }

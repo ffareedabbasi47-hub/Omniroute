@@ -54,12 +54,16 @@ class AttachmentStore(context: Context) {
     suspend fun import(uri: Uri): DraftAttachment = withContext(Dispatchers.IO) {
         val name = displayName(uri) ?: "attachment"
         val mime = ctx.contentResolver.getType(uri).orEmpty()
-        val kind = AttachmentRules.classify(name, mime) ?: throw AttachException(AttachmentRules.unsupportedMessage(name))
+        val kind = AttachmentRules.classify(name, mime)
         val size = sourceSize(uri)
         when (kind) {
             "image" -> {
-                if (size > AttachmentRules.MAX_IMAGE_SOURCE_BYTES) throw AttachException("\"$name\" is too large (max 40 MB).")
-                importImage(uri, name)
+                if (size > AttachmentRules.MAX_IMAGE_SOURCE_BYTES) throw AttachException("\"$name\" is too large (max 50 MB).")
+                try {
+                    importImage(uri, name)
+                } catch (_: Exception) {
+                    importFile(uri, name, mime, isPdf = false)
+                }
             }
             "video" -> importVideo(uri, name, size)
             else -> {

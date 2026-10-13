@@ -150,6 +150,17 @@ private fun CodeBlock(
         }
     }
 
+    var expanded by remember { mutableStateOf(false) }
+    val lines = remember(content) { content.lines() }
+    val isHuge = lines.size > 150
+    val displayContent = remember(content, expanded) {
+        if (isHuge && !expanded) {
+            lines.take(120).joinToString("\n")
+        } else {
+            content
+        }
+    }
+
     val shape = RoundedCornerShape(12.dp)
     Surface(
         shape = shape,
@@ -260,12 +271,30 @@ private fun CodeBlock(
                     .padding(12.dp)
             ) {
                 Text(
-                    text = content,
+                    text = displayContent,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = 18.sp
                 )
+            }
+            if (isHuge) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .clickable { expanded = !expanded }
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (expanded) "▲ Collapse code" else "▼ Showing 120 of ${lines.size} lines • Tap to expand (or Save File)",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }

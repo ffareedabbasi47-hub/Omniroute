@@ -175,7 +175,15 @@ fun ChatScreen(
     }
 
     fun launchPhotos() {
-        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+        try {
+            photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+        } catch (_: Exception) {
+            try {
+                filePicker.launch("image/*")
+            } catch (_: Exception) {
+                filePicker.launch("*/*")
+            }
+        }
     }
 
     fun launchFiles() {
@@ -366,7 +374,7 @@ fun ChatScreen(
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
                         ) {
                             if (ui.streaming) {
-                                item(key = "streaming") { StreamingBubble(ui.partial, mode) }
+                                item(key = "streaming") { StreamingBubble(ui.partial, mode, ui.status) }
                             }
                             items(messages.reversed(), key = { it.id }) { m ->
                                 MessageBubble(
@@ -646,7 +654,7 @@ private fun AssistantAvatar() {
 }
 
 @Composable
-private fun StreamingBubble(partial: String, mode: ChatMode) {
+private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
     val ex = LocalOmni.current
     Row(Modifier.fillMaxWidth()) {
         AssistantAvatar()
@@ -658,18 +666,37 @@ private fun StreamingBubble(partial: String, mode: ChatMode) {
                 .background(ex.assistantBubble)
                 .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            if (partial.isNotEmpty()) {
-                MarkdownView(partial)
-            } else if (mode == ChatMode.CHAT) {
-                TypingDots()
-            } else {
-                Column {
+            Column {
+                if (status != null) {
+                    Row(
+                        modifier = Modifier
+                            .padding(bottom = 8.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+                if (partial.isNotEmpty()) {
+                    MarkdownView(partial)
+                } else if (mode == ChatMode.CHAT) {
                     TypingDots()
-                    Text(
-                        if (mode == ChatMode.IMAGE) "Generating image…" else "Generating video… this can take several minutes.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                } else {
+                    Column {
+                        TypingDots()
+                        Text(
+                            if (mode == ChatMode.IMAGE) "Generating image…" else "Generating video… this can take several minutes.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

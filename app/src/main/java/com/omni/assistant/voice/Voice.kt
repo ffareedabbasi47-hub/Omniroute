@@ -208,8 +208,8 @@ class VoiceController(context: Context) {
                     failed("No speech voice installed for ${locale.displayName}. Install it in Android settings.")
                 } else {
                     applyBestVoice(locale)
-                    engine.setSpeechRate(1.15f)
-                    engine.setPitch(1.02f)
+                    engine.setSpeechRate(1.08f)
+                    engine.setPitch(1.00f)
 
                     engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {}
