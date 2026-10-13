@@ -228,7 +228,12 @@ class Bridge:
         env["PATH"] = cpath
         if "HOME" not in env:
             env["HOME"] = os.path.expanduser("~")
-        return env
+        clean_env = {}
+        for k, v in env.items():
+            if isinstance(k, str) and isinstance(v, str):
+                if "\x00" not in k and "\x00" not in v:
+                    clean_env[k] = v
+        return clean_env
 
     def claude_version(self):
         try:
@@ -249,7 +254,8 @@ class Bridge:
             "Always label each code block with its exact filename (e.g. ```html:index.html, ```javascript:game.js, ```css:style.css). "
             "For web games, ensure index.html includes full interactive visuals, sounds, animations, and touch controls so it plays immediately in a mobile browser.\n\n"
         )
-        full_prompt = system_hint + prompt
+        clean_prompt = str(prompt).replace("\x00", "").strip()
+        full_prompt = (system_hint + clean_prompt).replace("\x00", "").strip()
 
         bins = [bin_to_use]
         full_home_agy = os.path.expanduser("~/.local/bin/agy")
@@ -258,13 +264,15 @@ class Bridge:
 
         candidates = []
         for b in bins:
+            candidates.append(([b, "--dangerously-skip-permissions", "-p", full_prompt], None))
             candidates.append(([b, "-p", full_prompt], None))
-            candidates.append(([b, full_prompt], None))
+            candidates.append(([b, "--dangerously-skip-permissions"], full_prompt))
             candidates.append(([b], full_prompt))
-            candidates.append(([b, "-p", full_prompt, "--dangerously-skip-permissions"], None))
 
         last_err = ""
-        for cmd, stdin_data in candidates:
+        for raw_cmd, raw_stdin in candidates:
+            cmd = [str(arg).replace("\x00", "") for arg in raw_cmd]
+            stdin_data = str(raw_stdin).replace("\x00", "") if raw_stdin is not None else None
             try:
                 p = subprocess.run(
                     cmd,
@@ -592,7 +600,7 @@ class Handler(BaseHTTPRequestHandler):
                 content = " ".join(p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text")
             prompt_parts.append(f"{role}: {content}")
         # Keep last 15 turns max to avoid OS argument length limits
-        prompt = "\n".join(prompt_parts[-15:])
+        prompt = "\n".join(prompt_parts[-15:]).replace("\x00", "")
 
         if stream:
             self.send_response(200)
