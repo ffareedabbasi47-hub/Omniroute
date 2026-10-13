@@ -63,7 +63,7 @@ data class ConversationTask(
     val error: String? = null
 )
 
-enum class ChatMode { CHAT, IMAGE, VIDEO }
+enum class ChatMode { CHAT }
 
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val omni = app as OmniApp
@@ -136,9 +136,6 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val _mode = MutableStateFlow(ChatMode.CHAT)
     val mode: StateFlow<ChatMode> = _mode.asStateFlow()
 
-    /** Failed generation messages -> the mode that produced them, so Retry repeats the right request. */
-    private val failedModes = HashMap<Long, ChatMode>()
-
     init {
         store.clearCameraCache()
     }
@@ -147,13 +144,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         _draft.value = text
     }
 
-    fun setMode(m: ChatMode) {
-        val active = _conversationId.value?.let { activeTasks.value[it]?.streaming } == true
-        if (active) return
-        if (m != ChatMode.CHAT && _pending.value.isNotEmpty()) {
-            notify("Attachments are only used in Chat mode, so they were kept for later.")
-        }
-        _mode.value = m
+    fun setMode(m: ChatMode = ChatMode.CHAT) {
+        _mode.value = ChatMode.CHAT
     }
 
     fun dismissMessages() {
@@ -259,17 +251,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     /** Returns true if the message was accepted. Runs on Application scope so tasks survive navigation! */
     fun send(raw: String): Boolean {
         val text = raw.trim()
-        val mode = _mode.value
-        val attached = if (mode == ChatMode.CHAT) _pending.value else emptyList()
+        val attached = _pending.value
         if ((text.isEmpty() && attached.isEmpty()) || _uiBase.value.importing) return false
         val cfg = omni.settings.current
-        if (cfg.baseUrl.isBlank() || (mode == ChatMode.CHAT && cfg.model.isBlank())) {
+        if (cfg.baseUrl.isBlank() || cfg.model.isBlank()) {
             _uiBase.update { it.copy(error = "Set the base URL and a model in Settings first.") }
             return false
         }
-        if (mode == ChatMode.IMAGE && text.isEmpty()) return false
         omni.voice.stopSpeaking()
-        if (mode == ChatMode.CHAT) _pending.value = emptyList()
+        _pending.value = emptyList()
 
         val now = System.currentTimeMillis()
         var cid = _conversationId.value
@@ -299,30 +289,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             }
             dao.touch(targetCid, now)
 
-            val lower = text.lowercase().trim()
-            val hasImageKeyword = Regex("""\b(photo|ohoto|image|picture|tasveer|pic|pics|wallpaper|drawing|painting|screenshot|portrait|illustration)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-            val hasActionKeyword = Regex("""\b(banao|bana|banaye|banado|create|creat|generate|generat|make|draw|dikhao|chahiye|de|do|show|get|want)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-            val isExplicitImagePrefix = lower.startsWith("photo") || lower.startsWith("ohoto") || lower.startsWith("image") || lower.startsWith("pic") ||
-                lower.contains("ki photo") || lower.contains("ka photo") || lower.contains("ki image") || lower.contains("ka image")
-
-            val isImageGen = attached.isEmpty() && (mode == ChatMode.IMAGE || (mode == ChatMode.CHAT && (
-                isExplicitImagePrefix || (hasImageKeyword && hasActionKeyword) ||
-                (hasImageKeyword && !lower.contains("code") && !lower.contains("class ") && !lower.contains("function"))
-            )))
-
-            val hasVideoKeyword = Regex("""\b(video|vdeo|vedeo|clip|animation)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lower)
-            val isExplicitVideoPrefix = lower.startsWith("video") || lower.startsWith("vdeo") || lower.startsWith("vedeo") ||
-                lower.contains("ki video") || lower.contains("ka video") || lower.contains("ki vdeo") || lower.contains("ki vedeo")
-
-            val isVideoGen = attached.isEmpty() && (mode == ChatMode.VIDEO || (mode == ChatMode.CHAT && (
-                isExplicitVideoPrefix || (hasVideoKeyword && hasActionKeyword)
-            )))
-
-            when {
-                isImageGen -> runMedia(targetCid, text, ChatMode.IMAGE)
-                isVideoGen -> runMedia(targetCid, text, ChatMode.VIDEO)
-                else -> runGeneration(targetCid)
-            }
+            runGeneration(targetCid)
         }
         return true
     }
@@ -332,90 +299,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (activeTasks.value[cid]?.streaming == true) return
         omni.appScope.launch {
             dao.deleteMessage(failedMessageId)
-            val m = failedModes.remove(failedMessageId) ?: ChatMode.CHAT
-            if (m == ChatMode.CHAT) {
-                runGeneration(cid)
-            } else {
-                val prompt = dao.getMessages(cid).lastOrNull { it.role == "user" }?.content.orEmpty()
-                runMedia(cid, prompt, m)
-            }
-        }
-    }
-
-    /** Image / video generation: one request, results saved privately and attached to the reply. */
-    private suspend fun runMedia(cid: Long, prompt: String, mode: ChatMode) {
-        runningJobs[cid] = coroutineContext.job
-        val kindWord = if (mode == ChatMode.IMAGE) "image" else "video"
-        activeTasks.update {
-            it + (cid to ConversationTask(
-                cid = cid,
-                streaming = true,
-                status = "Generating $kindWord with AI..."
-            ))
-        }
-        val files = ArrayList<DraftAttachment>()
-        try {
-            val items = if (mode == ChatMode.IMAGE) omni.client.requestImages(prompt) else omni.client.requestVideo(prompt)
-            for ((i, item) in items.withIndex()) {
-                val tmp = store.newGeneratedFile("bin")
-                val type = try {
-                    omni.client.saveItem(item, tmp, if (mode == ChatMode.IMAGE) 40L * 1024 * 1024 else 300L * 1024 * 1024)
-                } catch (e: Exception) {
-                    tmp.delete()
-                    throw e
-                }
-                if (type == null || type.kind != kindWord) {
-                    tmp.delete()
-                    throw ApiException(
-                        ApiException.Kind.BAD_RESPONSE,
-                        "The server returned data that isn't a recognised $kindWord file."
-                    )
-                }
-                val dest = java.io.File(tmp.parentFile, tmp.nameWithoutExtension + "." + type.ext)
-                if (!tmp.renameTo(dest)) {
-                    tmp.delete()
-                    throw ApiException(ApiException.Kind.CLIENT, "Couldn't store the generated file.")
-                }
-                val name = if (items.size > 1) "$kindWord-${i + 1}.${type.ext}" else "$kindWord.${type.ext}"
-                files.add(store.registerGenerated(dest, if (mode == ChatMode.IMAGE) "image" else "video", name, type.mime))
-            }
-            val now = System.currentTimeMillis()
-            val mid = dao.insertMessage(
-                MessageEntity(
-                    conversationId = cid, role = "assistant", createdAt = now,
-                    content = "Generated $kindWord for: \"${prompt.take(200)}\""
-                )
-            )
-            dao.insertAttachments(
-                files.map {
-                    AttachmentEntity(
-                        messageId = mid, kind = it.kind, name = it.name, mime = it.mime,
-                        path = it.path, thumbPath = it.thumbPath, sizeBytes = it.sizeBytes
-                    )
-                }
-            )
-            dao.touch(cid, now)
-            omni.connection.markOk()
-        } catch (e: CancellationException) {
-            files.forEach { store.delete(it) }
-            throw e
-        } catch (e: Exception) {
-            files.forEach { store.delete(it) }
-            val api = e as? ApiException
-                ?: ApiException(ApiException.Kind.CLIENT, "Unexpected error (${e.javaClass.simpleName}).")
-            val id = dao.insertMessage(
-                MessageEntity(
-                    conversationId = cid, role = "assistant", content = "",
-                    createdAt = System.currentTimeMillis(), failed = true, error = api.message
-                )
-            )
-            failedModes[id] = mode
-            if (api.kind == ApiException.Kind.NETWORK || api.kind == ApiException.Kind.AUTH) {
-                omni.connection.markFailed(api.message.orEmpty())
-            }
-        } finally {
-            runningJobs.remove(cid)
-            activeTasks.update { it - cid }
+            runGeneration(cid)
         }
     }
 

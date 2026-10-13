@@ -507,15 +507,15 @@ fun ChatScreen(
     if (showSheet) {
         ModalBottomSheet(onDismissRequest = { showSheet = false }, sheetState = rememberModalBottomSheetState()) {
             Column(Modifier.padding(bottom = 24.dp)) {
-                SheetRow(Icons.Default.PhotoCamera, "Camera", "Take a photo") {
+                SheetRow(Icons.Default.PhotoCamera, "Camera", "Take & send a photo") {
                     showSheet = false
                     launchCamera()
                 }
-                SheetRow(Icons.Default.Image, "Photos & videos", "Videos are sent as sampled frames") {
+                SheetRow(Icons.Default.Image, "Photos & images", "Send images from gallery") {
                     showSheet = false
                     launchPhotos()
                 }
-                SheetRow(Icons.Default.Description, "Files", "PDF, text and code files") {
+                SheetRow(Icons.Default.Description, "Files & documents", "Send PDF, text and code files") {
                     showSheet = false
                     launchFiles()
                 }
@@ -675,12 +675,12 @@ private fun HomeContent(
                 )
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ActionCard(Icons.Default.PhotoCamera, "Camera", "Ask about a photo", Modifier.weight(1f), onCamera)
-                ActionCard(Icons.Default.Image, "Photos & video", "Pick from gallery", Modifier.weight(1f), onPhotos)
+                ActionCard(Icons.Default.PhotoCamera, "Camera", "Take & send photo", Modifier.weight(1f), onCamera)
+                ActionCard(Icons.Default.Image, "Photos", "Send image from gallery", Modifier.weight(1f), onPhotos)
             }
         }
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionCard(Icons.Default.Description, "Files", "PDF, text, code", Modifier.weight(1f).fillMaxHeight(), onFiles)
+            ActionCard(Icons.Default.Description, "Files", "Send PDF, text, code", Modifier.weight(1f).fillMaxHeight(), onFiles)
             ActionCard(Icons.Default.Code, "Coding agent", "Claude Code bridge", Modifier.weight(1f).fillMaxHeight(), onAgent)
         }
         if (conversations.isNotEmpty()) {
@@ -833,7 +833,7 @@ private fun LiveStageHeader(status: String) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = "Live AI Generation in progress...",
+                    text = "Live AI response in progress...",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
                 )
@@ -1030,7 +1030,7 @@ private fun StreamingBubble(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
-                } else if (mode == ChatMode.CHAT) {
+                } else {
                     Column {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1039,20 +1039,11 @@ private fun StreamingBubble(
                             TypingDots()
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Thinking & preparing files...",
+                                "Thinking & preparing reply...",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    }
-                } else {
-                    Column {
-                        TypingDots()
-                        Text(
-                            if (mode == ChatMode.IMAGE) "Generating image…" else "Generating video… this can take several minutes.",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
@@ -1354,18 +1345,9 @@ private fun Composer(
     onRemovePending: (String) -> Unit
 ) {
     val ex = LocalOmni.current
-    val chat = mode == ChatMode.CHAT
-    val canSend = (text.isNotBlank() || (chat && pending.isNotEmpty())) && !importing
+    val canSend = (text.isNotBlank() || pending.isNotEmpty()) && !importing
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Row(
-            Modifier.padding(bottom = 6.dp).horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            for ((m, label) in listOf(ChatMode.CHAT to "Chat", ChatMode.IMAGE to "Create image", ChatMode.VIDEO to "Create video")) {
-                FilterChip(selected = mode == m, onClick = { onMode(m) }, enabled = !streaming, label = { Text(label) })
-            }
-        }
-        if (chat && (pending.isNotEmpty() || importing)) {
+        if (pending.isNotEmpty() || importing) {
             ComposerAttachmentRow(pending, importing, onOpenPending, onRemovePending)
         }
         val shape = RoundedCornerShape(28.dp)
@@ -1378,8 +1360,8 @@ private fun Composer(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            IconButton(onClick = onAttach, enabled = !streaming && chat, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.Add, contentDescription = "Attach photos, videos or files")
+            IconButton(onClick = onAttach, enabled = !streaming, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.Add, contentDescription = "Attach photos or files")
             }
             TextField(
                 value = text,
@@ -1389,8 +1371,6 @@ private fun Composer(
                     Text(
                         when {
                             listening -> "Listening…"
-                            mode == ChatMode.IMAGE -> "Describe the image to create…"
-                            mode == ChatMode.VIDEO -> "Describe the video to create…"
                             else -> "Ask me something…"
                         }
                     )
@@ -1426,7 +1406,7 @@ private fun Composer(
                     .clickable(
                         enabled = streaming || canSend,
                         role = Role.Button,
-                        onClickLabel = if (streaming) "Stop generating" else if (chat) "Send message" else "Generate",
+                        onClickLabel = if (streaming) "Stop generating" else "Send message",
                         onClick = if (streaming) onStop else onSend
                     ),
                 contentAlignment = Alignment.Center
