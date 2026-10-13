@@ -110,8 +110,6 @@ import com.omni.assistant.data.AttachmentRules
 import com.omni.assistant.data.ConversationEntity
 import com.omni.assistant.data.DraftAttachment
 import com.omni.assistant.data.MessageEntity
-import com.omni.assistant.data.FileExport
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.rememberCoroutineScope
