@@ -54,7 +54,7 @@ class AttachmentStore(context: Context) {
     suspend fun import(uri: Uri): DraftAttachment = withContext(Dispatchers.IO) {
         val name = displayName(uri) ?: "attachment"
         val mime = ctx.contentResolver.getType(uri).orEmpty()
-        val kind = AttachmentRules.classify(name, mime)
+        val kind = AttachmentRules.classify(name, mime) ?: throw AttachException(AttachmentRules.unsupportedMessage(name))
         val size = sourceSize(uri)
         when (kind) {
             "image" -> {

@@ -33,8 +33,8 @@ object AttachmentRules {
         "application/yaml", "application/sql", "application/x-sh", "application/toml"
     )
 
-    /** Returns "image", "video", "pdf", "text", or "file". Every file type is supported. */
-    fun classify(name: String, mime: String): String {
+    /** Returns "image", "video", "pdf", "text", or null if the type is not supported. */
+    fun classify(name: String, mime: String): String? {
         val m = mime.lowercase()
         val ext = name.substringAfterLast('.', "").lowercase()
         return when {
@@ -42,12 +42,12 @@ object AttachmentRules {
             m.startsWith("video/") || ext in videoExtensions -> "video"
             m == "application/pdf" || ext == "pdf" -> "pdf"
             m.startsWith("text/") || m in textMimes || ext in textExtensions -> "text"
-            else -> "file"
+            else -> null
         }
     }
 
     fun unsupportedMessage(name: String): String =
-        "\"$name\" couldn't be loaded."
+        "\"$name\" isn't supported. You can attach images, videos, PDFs and text or code files."
 
     fun formatBytes(bytes: Long): String = when {
         bytes < 1024 -> "$bytes B"
