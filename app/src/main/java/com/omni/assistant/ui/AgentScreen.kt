@@ -330,7 +330,7 @@ private fun DiffView(diff: String) {
             }
         }
     }
-    Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF0B0A12), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Text(
             text,
             fontFamily = FontFamily.Monospace,
@@ -343,7 +343,7 @@ private fun DiffView(diff: String) {
 @Composable
 private fun LogView(lines: List<BridgeLine>) {
     val shown = lines.takeLast(200)
-    Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF0B0A12), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             for (l in shown) {
                 val color = when (l.kind) {

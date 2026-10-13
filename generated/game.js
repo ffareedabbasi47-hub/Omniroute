@@ -1,1392 +1,685 @@
-// game.js - Core Engine for My Talking Tom 2 Game
-// Complete interactive cat physics, animation, rooms, voice mimic, and mini-game
+/* ============================================================
+   CYBER-HEART PROTOCOL: ZOYA & FARDEEN
+   Game Logic, Web Audio Synth, Interactive Controls
+   ============================================================ */
 
-(function() {
-    'use strict';
+// ---------------- AUDIO SYNTHESIZER ENGINE ----------------
+class SoundEngine {
+  constructor() {
+    this.ctx = null;
+    this.enabled = true;
+    this.bgmOscs = [];
+  }
 
-    // Game State
-    const state = {
-        coins: parseInt(localStorage.getItem('tom_coins') || '150', 10),
-        hunger: parseInt(localStorage.getItem('tom_hunger') || '75', 10),
-        energy: parseInt(localStorage.getItem('tom_energy') || '85', 10),
-        toilet: parseInt(localStorage.getItem('tom_toilet') || '40', 10), // 0 is empty, 100 is urgent
-        hygiene: parseInt(localStorage.getItem('tom_hygiene') || '80', 10),
-        happiness: parseInt(localStorage.getItem('tom_happiness') || '90', 10),
-        currentRoom: 'living', // living, kitchen, bathroom, bedroom, doctor
-        isSleeping: false,
-        isSick: false,
-        equipped: JSON.parse(localStorage.getItem('tom_equipped') || JSON.stringify({
-            hat: 'none',
-            glasses: 'none',
-            fur: '#8e9aaf'
-        })),
-        unlockedItems: JSON.parse(localStorage.getItem('tom_unlocked') || JSON.stringify(['none', '#8e9aaf'])),
-        soapBubbles: []
-    };
-
-    // Tom Character Procedural State
-    const tom = {
-        x: 210,
-        y: 440,
-        baseScale: 1.0,
-        scaleY: 1.0,
-        scaleX: 1.0,
-        rotation: 0,
-        headAngle: 0,
-        // Eyes
-        blinkTimer: 0,
-        isBlinking: false,
-        lookTargetX: 0,
-        lookTargetY: 0,
-        curLookX: 0,
-        curLookY: 0,
-        eyeState: 'normal', // normal, happy, dizzy, sleepy, surprised
-        // Mouth
-        mouthOpen: 0,
-        mouthState: 'smile', // smile, open, talking, chew, ouch, fire
-        // Action state
-        action: 'idle', // idle, pet, slap, eat, sleep, toilet, sick, listening, talking
-        actionTimer: 0,
-        // Tail
-        tailAngle: 0,
-        tailPhase: 0,
-        // Chewing counter
-        chewPhase: 0,
-        // Fire breath
-        fireParticles: [],
-        stars: [],
-        hearts: []
-    };
-
-    // DOM Elements
-    const canvas = document.getElementById('tom-canvas');
-    const ctx = canvas.getContext('2d');
-    const stage = document.getElementById('stage');
-    const speechBubble = document.getElementById('speech-bubble');
-    const coinCountEl = document.getElementById('coin-count');
-
-    // Setup Canvas DPI
-    function resizeCanvas() {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
-        tom.x = rect.width / 2;
-        tom.y = rect.height * 0.78;
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
     }
-
-    // Save Game State
-    function saveState() {
-        localStorage.setItem('tom_coins', state.coins);
-        localStorage.setItem('tom_hunger', state.hunger);
-        localStorage.setItem('tom_energy', state.energy);
-        localStorage.setItem('tom_toilet', state.toilet);
-        localStorage.setItem('tom_hygiene', state.hygiene);
-        localStorage.setItem('tom_happiness', state.happiness);
-        localStorage.setItem('tom_equipped', JSON.stringify(state.equipped));
-        localStorage.setItem('tom_unlocked', JSON.stringify(state.unlockedItems));
-        updateMetersUI();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
     }
+  }
 
-    // Update UI Meters
-    function updateMetersUI() {
-        coinCountEl.textContent = state.coins;
+  playTone(freq, type = 'sine', duration = 0.15, gainVal = 0.1) {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
 
-        updateSingleMeter('meter-hunger', state.hunger, true);
-        updateSingleMeter('meter-energy', state.energy, true);
-        updateSingleMeter('meter-toilet', 100 - state.toilet, true); // Higher is cleaner
-        updateSingleMeter('meter-hygiene', state.hygiene, true);
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+      gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + duration);
+    } catch (e) {
+      // Audio fallback
     }
-
-    function updateSingleMeter(id, val, inverted = false) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        val = Math.max(0, Math.min(100, val));
-        el.style.width = val + '%';
-        el.className = 'meter-bar-inner ' + (val > 55 ? 'green' : val > 25 ? 'yellow' : 'red');
-    }
-
-    // Show Speech Bubble with Text
-    let speechTimeout = null;
-    function showSpeech(text, duration = 3000) {
-        if (!speechBubble) return;
-        speechBubble.textContent = text;
-        speechBubble.classList.add('active');
-        clearTimeout(speechTimeout);
-        speechTimeout = setTimeout(() => {
-            speechBubble.classList.remove('active');
-        }, duration);
-    }
-
-    // Floating Particle Generator
-    function createFloatingParticle(icon, x, y) {
-        const p = document.createElement('div');
-        p.className = 'particle';
-        p.textContent = icon;
-        p.style.left = (x || canvas.offsetLeft + canvas.offsetWidth / 2) + 'px';
-        p.style.top = (y || canvas.offsetTop + 180) + 'px';
-        stage.appendChild(p);
-        setTimeout(() => p.remove(), 1200);
-    }
-
-    // --- PROCEDURAL DRAWING OF TOM THE CAT ---
-    function drawTom() {
-        const rect = canvas.getBoundingClientRect();
-        ctx.clearRect(0, 0, rect.width, rect.height);
-
-        ctx.save();
-        ctx.translate(tom.x, tom.y);
-        ctx.scale(tom.scaleX, tom.scaleY);
-        ctx.rotate(tom.rotation);
-
-        const fur = state.equipped.fur || '#8e9aaf';
-        const belly = '#f8f9fa';
-        const earInner = '#ffcad4';
-
-        // 1. TAIL (Behind body)
-        ctx.save();
-        ctx.beginPath();
-        ctx.strokeStyle = fur;
-        ctx.lineWidth = 18;
-        ctx.lineCap = 'round';
-        const tailEnd = Math.sin(tom.tailPhase) * 28;
-        ctx.moveTo(35, -20);
-        ctx.quadraticCurveTo(80 + tailEnd, -70, 70 + tailEnd, -120);
-        ctx.stroke();
-        // Tail tip white fluff
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 12;
-        ctx.beginPath();
-        ctx.moveTo(70 + tailEnd, -105);
-        ctx.lineTo(70 + tailEnd, -120);
-        ctx.stroke();
-        ctx.restore();
-
-        // 2. FEET & PAWS (Bottom)
-        // Left Foot
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        ctx.ellipse(-55, 10, 26, 18, -0.1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(-55, 12, 18, 12, -0.1, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Right Foot
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        ctx.ellipse(55, 10, 26, 18, 0.1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(55, 12, 18, 12, 0.1, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 3. BODY
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        ctx.ellipse(0, -90, 75, 105, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // White belly patch
-        ctx.fillStyle = belly;
-        ctx.beginPath();
-        ctx.ellipse(0, -78, 48, 70, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Belly button cute dot
-        ctx.fillStyle = '#ced4da';
-        ctx.beginPath();
-        ctx.arc(0, -50, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 4. ARMS & HANDS
-        // Left Arm
-        ctx.save();
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        if (tom.action === 'listening') {
-            // Raised to ear
-            ctx.ellipse(-70, -140, 16, 45, 0.5, 0, Math.PI * 2);
-        } else {
-            ctx.ellipse(-72, -90, 18, 50, 0.25, 0, Math.PI * 2);
-        }
-        ctx.fill();
-        // Hand
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(tom.action === 'listening' ? -65 : -76, tom.action === 'listening' ? -175 : -45, 15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        // Right Arm
-        ctx.save();
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        ctx.ellipse(72, -90, 18, 50, -0.25, 0, Math.PI * 2);
-        ctx.fill();
-        // Hand
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(76, -45, 15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        // Neck Bowtie or Bell
-        if (state.equipped.neck === 'red_bowtie') {
-            ctx.fillStyle = '#e63946';
-            ctx.beginPath();
-            ctx.moveTo(-16, -170); ctx.lineTo(-16, -150); ctx.lineTo(0, -160); ctx.fill();
-            ctx.moveTo(16, -170); ctx.lineTo(16, -150); ctx.lineTo(0, -160); ctx.fill();
-            ctx.fillStyle = '#ffbe0b';
-            ctx.beginPath(); ctx.arc(0, -160, 6, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // 5. HEAD
-        ctx.save();
-        ctx.translate(0, -195);
-        ctx.rotate(tom.headAngle);
-
-        // EARS
-        // Left Ear
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        ctx.moveTo(-75, -50);
-        ctx.lineTo(-65, -125);
-        ctx.lineTo(-20, -75);
-        ctx.closePath();
-        ctx.fill();
-        // Inner Left Ear
-        ctx.fillStyle = earInner;
-        ctx.beginPath();
-        ctx.moveTo(-68, -55);
-        ctx.lineTo(-62, -112);
-        ctx.lineTo(-26, -72);
-        ctx.closePath();
-        ctx.fill();
-
-        // Right Ear
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        ctx.moveTo(75, -50);
-        ctx.lineTo(65, -125);
-        ctx.lineTo(20, -75);
-        ctx.closePath();
-        ctx.fill();
-        // Inner Right Ear
-        ctx.fillStyle = earInner;
-        ctx.beginPath();
-        ctx.moveTo(68, -55);
-        ctx.lineTo(62, -112);
-        ctx.lineTo(26, -72);
-        ctx.closePath();
-        ctx.fill();
-
-        // Big Round Cute Cat Face
-        ctx.fillStyle = fur;
-        ctx.beginPath();
-        ctx.ellipse(0, -30, 88, 76, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // White Muzzle / Cheeks
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(-24, -14, 30, 22, -0.1, 0, Math.PI * 2);
-        ctx.ellipse(24, -14, 30, 22, 0.1, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Whiskers (3 on each side)
-        ctx.strokeStyle = '#495057';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        // Left whiskers
-        ctx.moveTo(-45, -16); ctx.lineTo(-95, -26);
-        ctx.moveTo(-45, -10); ctx.lineTo(-98, -10);
-        ctx.moveTo(-45, -4);  ctx.lineTo(-92, 10);
-        // Right whiskers
-        ctx.moveTo(45, -16);  ctx.lineTo(95, -26);
-        ctx.moveTo(45, -10);  ctx.lineTo(98, -10);
-        ctx.moveTo(45, -4);   ctx.lineTo(92, 10);
-        ctx.stroke();
-
-        // Rosy Cheeks when Happy
-        if (tom.eyeState === 'happy' || tom.action === 'pet') {
-            ctx.fillStyle = 'rgba(255, 117, 143, 0.55)';
-            ctx.beginPath();
-            ctx.arc(-52, -15, 14, 0, Math.PI * 2);
-            ctx.arc(52, -15, 14, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Cute Pink Heart Nose
-        ctx.fillStyle = '#ff758f';
-        ctx.beginPath();
-        ctx.moveTo(0, -22);
-        ctx.quadraticCurveTo(-10, -32, -12, -26);
-        ctx.quadraticCurveTo(-10, -18, 0, -14);
-        ctx.quadraticCurveTo(10, -18, 12, -26);
-        ctx.quadraticCurveTo(10, -32, 0, -22);
-        ctx.fill();
-
-        // EYES
-        drawEye(-36, -52, tom.curLookX, tom.curLookY, tom.eyeState, tom.isBlinking);
-        drawEye(36, -52, tom.curLookX, tom.curLookY, tom.eyeState, tom.isBlinking);
-
-        // MOUTH
-        drawMouth();
-
-        // SICK / BAND-AID (If in Doctor room or sick)
-        if (state.isSick || state.currentRoom === 'doctor') {
-            ctx.save();
-            ctx.translate(-35, -80);
-            ctx.rotate(-0.3);
-            ctx.fillStyle = '#ffe3a8';
-            ctx.fillRect(-18, -8, 36, 16);
-            ctx.strokeStyle = '#e09f3e';
-            ctx.strokeRect(-18, -8, 36, 16);
-            ctx.fillStyle = '#e63946';
-            ctx.fillRect(-3, -6, 6, 12);
-            ctx.fillRect(-6, -3, 12, 6);
-            ctx.restore();
-        }
-
-        // ACCESSORIES: GLASSES
-        if (state.equipped.glasses === 'cool_shades') {
-            ctx.fillStyle = '#111111';
-            ctx.strokeStyle = '#333333';
-            ctx.lineWidth = 3;
-            // Left lens
-            ctx.beginPath();
-            ctx.roundRect(-66, -66, 56, 32, [8, 8, 18, 18]);
-            ctx.fill(); ctx.stroke();
-            // Right lens
-            ctx.beginPath();
-            ctx.roundRect(10, -66, 56, 32, [8, 8, 18, 18]);
-            ctx.fill(); ctx.stroke();
-            // Bridge
-            ctx.beginPath();
-            ctx.moveTo(-10, -56); ctx.lineTo(10, -56); ctx.stroke();
-        }
-
-        // ACCESSORIES: HATS
-        drawHat(state.equipped.hat);
-
-        ctx.restore(); // End head transform
-        ctx.restore(); // End Tom transform
-
-        // Render particles (Fire, Stars, Bubbles)
-        renderEffects(rect);
-    }
-
-    // Helper: Draw Eye
-    function drawEye(cx, cy, lookX, lookY, eyeState, blinking) {
-        ctx.save();
-        ctx.translate(cx, cy);
-
-        if (blinking) {
-            ctx.strokeStyle = '#343a40';
-            ctx.lineWidth = 3.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, 18, 0.2, Math.PI - 0.2);
-            ctx.stroke();
-            ctx.restore();
-            return;
-        }
-
-        if (eyeState === 'happy') {
-            ctx.strokeStyle = '#2b2d42';
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.arc(0, 4, 16, Math.PI + 0.3, Math.PI * 2 - 0.3);
-            ctx.stroke();
-            ctx.restore();
-            return;
-        }
-
-        if (eyeState === 'dizzy') {
-            ctx.strokeStyle = '#7209b7';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            for (let a = 0; a < Math.PI * 4; a += 0.2) {
-                const r = a * 3;
-                const sx = Math.cos(a + Date.now() * 0.01) * r;
-                const sy = Math.sin(a + Date.now() * 0.01) * r;
-                if (a === 0) ctx.moveTo(sx, sy);
-                else ctx.lineTo(sx, sy);
-            }
-            ctx.stroke();
-            ctx.restore();
-            return;
-        }
-
-        // Normal Eye Sclera (White)
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 24, 28, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#dee2e6';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Emerald Green Cartoon Iris
-        const lx = lookX * 8;
-        const ly = lookY * 8;
-        ctx.fillStyle = '#2ec4b6';
-        ctx.beginPath();
-        ctx.arc(lx, ly, 15, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Deep Pupil
-        ctx.fillStyle = '#011627';
-        ctx.beginPath();
-        ctx.arc(lx, ly, 9, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Glint / Reflections
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(lx - 4, ly - 4, 4.5, 0, Math.PI * 2);
-        ctx.arc(lx + 3, ly + 3, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    // Helper: Draw Mouth
-    function drawMouth() {
-        ctx.save();
-        ctx.translate(0, -6);
-
-        if (tom.mouthState === 'open' || tom.mouthState === 'talking' || tom.mouthState === 'chew') {
-            const h = Math.max(10, tom.mouthOpen * 26);
-            ctx.fillStyle = '#67102a';
-            ctx.beginPath();
-            ctx.ellipse(0, h * 0.5, 18, h, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Pink Tongue
-            ctx.fillStyle = '#ff758f';
-            ctx.beginPath();
-            ctx.ellipse(0, h * 0.8, 12, h * 0.5, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Teeth
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(-6, 0, 5, 5);
-            ctx.fillRect(1, 0, 5, 5);
-        } else {
-            // Smiling cat mouth
-            ctx.strokeStyle = '#343a40';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(0, -8);
-            ctx.lineTo(0, -2);
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(-10, -2, 10, 0.1, Math.PI * 0.9);
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(10, -2, 10, 0.1, Math.PI * 0.9);
-            ctx.stroke();
-        }
-
-        ctx.restore();
-    }
-
-    // Helper: Draw Hats
-    function drawHat(hat) {
-        if (!hat || hat === 'none') return;
-        ctx.save();
-
-        if (hat === 'crown') {
-            ctx.translate(0, -95);
-            ctx.fillStyle = '#ffb703';
-            ctx.beginPath();
-            ctx.moveTo(-35, 10);
-            ctx.lineTo(-40, -30);
-            ctx.lineTo(-20, -10);
-            ctx.lineTo(0, -40);
-            ctx.lineTo(20, -10);
-            ctx.lineTo(40, -30);
-            ctx.lineTo(35, 10);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#fb8500';
-            ctx.stroke();
-            // Jewels
-            ctx.fillStyle = '#d90429';
-            ctx.beginPath(); ctx.arc(0, -20, 5, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#4cc9f0';
-            ctx.beginPath(); ctx.arc(-22, -10, 4, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(22, -10, 4, 0, Math.PI * 2); ctx.fill();
-        } else if (hat === 'party') {
-            ctx.translate(0, -100);
-            ctx.fillStyle = '#f72585';
-            ctx.beginPath();
-            ctx.moveTo(-25, 15); ctx.lineTo(0, -65); ctx.lineTo(25, 15); ctx.closePath();
-            ctx.fill();
-            // Stripes
-            ctx.strokeStyle = '#ffbe0b';
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.moveTo(-12, -20); ctx.lineTo(12, -20);
-            ctx.moveTo(-18, 0); ctx.lineTo(18, 0);
-            ctx.stroke();
-            // Yellow pom-pom
-            ctx.fillStyle = '#ffbe0b';
-            ctx.beginPath(); ctx.arc(0, -65, 8, 0, Math.PI * 2); ctx.fill();
-        } else if (hat === 'nightcap') {
-            ctx.translate(0, -95);
-            ctx.fillStyle = '#3a0ca3';
-            ctx.beginPath();
-            ctx.moveTo(-35, 10);
-            ctx.quadraticCurveTo(0, -70, 45, -50);
-            ctx.quadraticCurveTo(20, -20, 35, 10);
-            ctx.closePath();
-            ctx.fill();
-            ctx.fillStyle = '#ffbe0b';
-            ctx.beginPath(); ctx.arc(45, -50, 9, 0, Math.PI * 2); ctx.fill();
-        } else if (hat === 'cap') {
-            ctx.translate(0, -85);
-            ctx.fillStyle = '#4361ee';
-            ctx.beginPath();
-            ctx.arc(0, 0, 38, Math.PI, 0);
-            ctx.fill();
-            ctx.fillStyle = '#3a0ca3';
-            ctx.beginPath();
-            ctx.ellipse(30, 0, 32, 10, 0.2, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        ctx.restore();
-    }
-
-    // Render Particle Effects
-    function renderEffects(rect) {
-        // Fire particles
-        for (let i = tom.fireParticles.length - 1; i >= 0; i--) {
-            const p = tom.fireParticles[i];
-            ctx.save();
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-
-            p.x += p.vx;
-            p.y += p.vy;
-            p.size *= 0.95;
-            p.life--;
-            if (p.life <= 0 || p.size < 1) {
-                tom.fireParticles.splice(i, 1);
-            }
-        }
-
-        // Soap bubbles on Tom in shower
-        state.soapBubbles.forEach(b => {
-            ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.strokeStyle = 'rgba(76, 201, 240, 0.8)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(tom.x + b.x, tom.y + b.y, b.size, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(tom.x + b.x - b.size * 0.3, tom.y + b.y - b.size * 0.3, b.size * 0.25, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        });
-    }
-
-    // --- MAIN GAME ANIMATION LOOP ---
-    let lastTime = performance.now();
-    function gameLoop(now) {
-        const dt = (now - lastTime) / 1000;
-        lastTime = now;
-
-        // Tail sway
-        tom.tailPhase += dt * 3;
-
-        // Breathing oscillation
-        const breath = Math.sin(now * 0.003) * 0.02;
-        tom.scaleY = 1.0 + breath;
-        tom.scaleX = 1.0 - breath * 0.5;
-
-        // Eye Look interpolation towards target
-        tom.curLookX += (tom.lookTargetX - tom.curLookX) * 0.1;
-        tom.curLookY += (tom.lookTargetY - tom.curLookY) * 0.1;
-
-        // Natural Random Blinking
-        tom.blinkTimer += dt;
-        if (!tom.isBlinking && tom.blinkTimer > 3.2 + Math.random() * 2) {
-            tom.isBlinking = true;
-            tom.blinkTimer = 0;
-            setTimeout(() => { tom.isBlinking = false; }, 140);
-        }
-
-        // Talking mouth sync
-        if (tom.action === 'talking') {
-            tom.mouthOpen = 0.3 + Math.abs(Math.sin(now * 0.025)) * 0.7;
-        }
-
-        // Chewing mouth sync
-        if (tom.action === 'eat') {
-            tom.mouthOpen = Math.abs(Math.sin(now * 0.02)) * 0.8;
-        }
-
-        // Sleep state
-        if (state.isSleeping) {
-            tom.eyeState = 'sleepy';
-            tom.headAngle = 0.1;
-            if (Math.random() < 0.02) {
-                createFloatingParticle('💤', canvas.offsetLeft + canvas.offsetWidth / 2 + 40, canvas.offsetTop + 160);
-                if (window.tomAudio && Math.random() < 0.25) window.tomAudio.playSnore();
-            }
-        }
-
-        drawTom();
-        requestAnimationFrame(gameLoop);
-    }
-
-    // --- USER INTERACTIONS (TOUCH & POINTER) ---
-    let isPetting = false;
-    let petMoves = 0;
-    let lastTouchX = 0;
-    let lastTouchY = 0;
-
-    canvas.addEventListener('pointerdown', (e) => {
-        window.tomAudio && window.tomAudio.init();
-        const rect = canvas.getBoundingClientRect();
-        const px = e.clientX - rect.left;
-        const py = e.clientY - rect.top;
-
-        lastTouchX = px;
-        lastTouchY = py;
-        isPetting = true;
-        petMoves = 0;
-
-        // If sleeping, wake up
-        if (state.isSleeping) {
-            wakeTomUp();
-            return;
-        }
-
-        // Hit Detection on Tom
-        const dx = px - rect.width / 2;
-        const dy = py - (rect.height * 0.78);
-
-        // 1. Tapped Head (Face / Ears)
-        if (dy < -130 && dy > -280 && Math.abs(dx) < 80) {
-            handleTomPoke('head');
-        }
-        // 2. Tapped Feet / Tickle
-        else if (dy > 0 && dy < 40 && Math.abs(dx) < 80) {
-            handleTomTickle();
-        }
+  }
+
+  playClick() {
+    this.playTone(800, 'sine', 0.08, 0.08);
+  }
+
+  playSuccess() {
+    if (!this.enabled) return;
+    this.init();
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    notes.forEach((freq, idx) => {
+      setTimeout(() => this.playTone(freq, 'triangle', 0.25, 0.12), idx * 80);
     });
-
-    canvas.addEventListener('pointermove', (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const px = e.clientX - rect.left;
-        const py = e.clientY - rect.top;
-
-        // Follow user finger/cursor with eyes
-        tom.lookTargetX = Math.max(-1, Math.min(1, (px - rect.width / 2) / 120));
-        tom.lookTargetY = Math.max(-1, Math.min(1, (py - (rect.height * 0.5)) / 120));
-
-        if (isPetting) {
-            const dist = Math.hypot(px - lastTouchX, py - lastTouchY);
-            if (dist > 8) {
-                petMoves++;
-                lastTouchX = px;
-                lastTouchY = py;
-
-                // When rubbing/petting
-                if (petMoves > 4 && tom.action !== 'slap') {
-                    triggerPettingReaction();
-                }
-            }
-        }
-    });
-
-    window.addEventListener('pointerup', () => {
-        if (isPetting) {
-            isPetting = false;
-            if (window.tomAudio) window.tomAudio.stopPurr();
-            if (tom.action === 'pet') {
-                tom.action = 'idle';
-                tom.eyeState = 'normal';
-                tom.mouthState = 'smile';
-                tom.mouthOpen = 0;
-            }
-        }
-    });
-
-    // 1. Petting Reaction (Purr, smile, hearts)
-    function triggerPettingReaction() {
-        tom.action = 'pet';
-        tom.eyeState = 'happy';
-        tom.mouthState = 'smile';
-        tom.headAngle = Math.sin(Date.now() * 0.005) * 0.08;
-
-        if (window.tomAudio) window.tomAudio.startPurr();
-
-        state.happiness = Math.min(100, state.happiness + 0.3);
-        saveState();
-
-        if (Math.random() < 0.15) {
-            createFloatingParticle('💖', canvas.offsetLeft + tom.x + (Math.random() * 60 - 30), canvas.offsetTop + 180);
-        }
-    }
-
-    // 2. Poke / Slap Reaction (Stumble, dizzy stars, squeak)
-    function handleTomPoke(target) {
-        if (tom.action === 'slap') return;
-        tom.action = 'slap';
-        tom.eyeState = 'dizzy';
-        tom.mouthState = 'open';
-        tom.mouthOpen = 0.8;
-        tom.rotation = 0.15;
-        tom.headAngle = -0.2;
-
-        if (window.tomAudio) window.tomAudio.playSlap();
-
-        createFloatingParticle('⭐', canvas.offsetLeft + tom.x - 30, canvas.offsetTop + 140);
-        createFloatingParticle('✨', canvas.offsetLeft + tom.x + 30, canvas.offsetTop + 130);
-
-        showSpeech('Arey baap re! 😵', 1500);
-
-        setTimeout(() => {
-            tom.rotation = -0.1;
-        }, 120);
-
-        setTimeout(() => {
-            tom.rotation = 0;
-            tom.headAngle = 0;
-            tom.eyeState = 'normal';
-            tom.mouthState = 'smile';
-            tom.mouthOpen = 0;
-            tom.action = 'idle';
-        }, 1100);
-    }
-
-    // 3. Tickle Reaction (Giggle)
-    function handleTomTickle() {
-        tom.action = 'pet';
-        tom.eyeState = 'happy';
-        tom.mouthState = 'open';
-        tom.mouthOpen = 0.6;
-        tom.scaleY = 1.15;
-
-        if (window.tomAudio) window.tomAudio.playGiggle();
-        showSpeech('Hahaha gudgudi ho rahi hai! 😂', 1500);
-
-        setTimeout(() => {
-            tom.scaleY = 1.0;
-            tom.eyeState = 'normal';
-            tom.mouthState = 'smile';
-            tom.mouthOpen = 0;
-            tom.action = 'idle';
-        }, 1200);
-    }
-
-    // --- ROOM SWITCHING SYSTEM ---
-    const navTabs = document.querySelectorAll('.nav-tab');
-    navTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const room = tab.dataset.room;
-            switchRoom(room);
-        });
-    });
-
-    function switchRoom(room) {
-        state.currentRoom = room;
-        navTabs.forEach(t => t.classList.toggle('active', t.dataset.room === room));
-
-        // Switch Stage background theme
-        stage.className = 'room-' + room;
-
-        // Toggle drawers/trays
-        document.getElementById('kitchen-tray').classList.toggle('hidden', room !== 'kitchen');
-        document.getElementById('bathroom-tray').classList.toggle('hidden', room !== 'bathroom');
-        document.getElementById('doctor-tray').classList.toggle('hidden', room !== 'doctor');
-        document.getElementById('talk-bar').classList.toggle('hidden', room !== 'living');
-        document.getElementById('quick-phrases').classList.toggle('hidden', room !== 'living');
-        document.getElementById('pet-companion').style.display = room === 'living' ? 'block' : 'none';
-
-        // Bedroom lamp
-        const lamp = document.getElementById('lamp-toggle');
-        if (lamp) lamp.style.display = room === 'bedroom' ? 'block' : 'none';
-
-        // Shower controls in bathroom
-        const showerHead = document.getElementById('shower-head');
-        if (showerHead) showerHead.style.display = room === 'bathroom' ? 'block' : 'none';
-
-        if (window.tomAudio) window.tomAudio.playMeow(1.2);
-    }
-
-    // --- KITCHEN: FOOD & FEEDING MECHANICS ---
-    const foodItems = document.querySelectorAll('.food-item');
-    foodItems.forEach(item => {
-        item.addEventListener('click', () => {
-            feedTom(item.dataset.food);
-        });
-    });
-
-    function feedTom(foodType) {
-        if (tom.action === 'eat') return;
-        tom.action = 'eat';
-        tom.eyeState = 'happy';
-        tom.mouthState = 'open';
-
-        if (window.tomAudio) {
-            window.tomAudio.playMunch();
-            setTimeout(() => window.tomAudio.playMunch(), 200);
-            setTimeout(() => window.tomAudio.playMunch(), 400);
-            setTimeout(() => window.tomAudio.playGulpAndBurp(), 650);
-        }
-
-        // Special Chili Event! 🔥🌶️
-        if (foodType === 'chili') {
-            setTimeout(() => {
-                triggerChiliReaction();
-            }, 750);
-            return;
-        }
-
-        // Normal Food
-        state.hunger = Math.min(100, state.hunger + 25);
-        state.coins += 2;
-        saveState();
-
-        createFloatingParticle('😋', canvas.offsetLeft + tom.x, canvas.offsetTop + 180);
-        showSpeech('Maza aa gaya! Yammi! 🤤', 2000);
-
-        setTimeout(() => {
-            tom.action = 'idle';
-            tom.eyeState = 'normal';
-            tom.mouthState = 'smile';
-            tom.mouthOpen = 0;
-        }, 1200);
-    }
-
-    function triggerChiliReaction() {
-        tom.eyeState = 'dizzy';
-        tom.mouthState = 'open';
-        tom.mouthOpen = 1.0;
-        showSpeech('AAG LAG GAYI! MIRCHI!! 🌶️🔥', 2500);
-
-        if (window.tomAudio) window.tomAudio.playFireBreath();
-
-        for (let i = 0; i < 40; i++) {
-            tom.fireParticles.push({
-                x: tom.x,
-                y: tom.y - 190,
-                vx: (Math.random() - 0.5) * 8,
-                vy: -Math.random() * 12 - 2,
-                size: 15 + Math.random() * 20,
-                color: Math.random() < 0.5 ? '#ff4d6d' : '#ffbe0b',
-                life: 35
-            });
-        }
-
-        setTimeout(() => {
-            tom.action = 'idle';
-            tom.eyeState = 'normal';
-            tom.mouthState = 'smile';
-            tom.mouthOpen = 0;
-        }, 2200);
-    }
-
-    // --- BATHROOM: TOILET & SHOWER ---
-    const toiletBtn = document.getElementById('btn-toilet');
-    if (toiletBtn) {
-        toiletBtn.addEventListener('click', () => {
-            tom.action = 'toilet';
-            tom.eyeState = 'dizzy';
-            showSpeech('Pooo... Fart! 💨🚽', 2000);
-
-            if (window.tomAudio) {
-                window.tomAudio.playFart();
-                setTimeout(() => window.tomAudio.playFlush(), 450);
-            }
-
-            state.toilet = 0;
-            state.coins += 5;
-            saveState();
-
-            createFloatingParticle('💨', canvas.offsetLeft + tom.x, canvas.offsetTop + 280);
-
-            setTimeout(() => {
-                tom.action = 'idle';
-                tom.eyeState = 'happy';
-                showSpeech('Aaha! Kitna halka feel ho raha hai! 😌', 2000);
-                setTimeout(() => {
-                    tom.eyeState = 'normal';
-                }, 1500);
-            }, 1800);
-        });
-    }
-
-    // Shower Soap & Water
-    const soapBtn = document.getElementById('btn-soap');
-    if (soapBtn) {
-        soapBtn.addEventListener('click', () => {
-            for (let i = 0; i < 8; i++) {
-                state.soapBubbles.push({
-                    x: (Math.random() - 0.5) * 120,
-                    y: -80 - Math.random() * 140,
-                    size: 8 + Math.random() * 14
-                });
-            }
-            if (window.tomAudio) window.tomAudio.playBubblePop();
-            createFloatingParticle('🫧', canvas.offsetLeft + tom.x, canvas.offsetTop + 220);
-        });
-    }
-
-    const showerHead = document.getElementById('shower-head');
-    const showerWater = document.getElementById('shower-water');
-    if (showerHead) {
-        showerHead.addEventListener('click', () => {
-            showerWater.classList.add('spraying');
-            if (window.tomAudio) window.tomAudio.playWaterSpray();
-
-            setTimeout(() => {
-                state.soapBubbles = [];
-                showerWater.classList.remove('spraying');
-                state.hygiene = 100;
-                state.coins += 5;
-                saveState();
-
-                createFloatingParticle('✨', canvas.offsetLeft + tom.x, canvas.offsetTop + 180);
-                if (window.tomAudio) window.tomAudio.playCureSparkle();
-                showSpeech('Tom ekdum saaf aur chamakdar ho gaya! 🧼', 2200);
-            }, 1200);
-        });
-    }
-
-    // --- BEDROOM: SLEEP & LAMP ---
-    const lampToggle = document.getElementById('lamp-toggle');
-    if (lampToggle) {
-        lampToggle.addEventListener('click', () => {
-            if (state.isSleeping) {
-                wakeTomUp();
-            } else {
-                putTomToSleep();
-            }
-        });
-    }
-
-    function putTomToSleep() {
-        state.isSleeping = true;
-        stage.classList.add('dark-mode');
-        lampToggle.textContent = '🌙';
-        tom.action = 'sleep';
-        state.equipped.hat = 'nightcap';
-        showSpeech('Shhh... Tom so raha hai! Good night! 😴', 2000);
-        if (window.tomAudio) window.tomAudio.playSnore();
-    }
-
-    function wakeTomUp() {
-        state.isSleeping = false;
-        stage.classList.remove('dark-mode');
-        lampToggle.textContent = '💡';
-        tom.action = 'idle';
-        tom.eyeState = 'normal';
-        state.equipped.hat = 'none';
-        state.energy = 100;
-        state.coins += 10;
-        saveState();
-
-        if (window.tomAudio) window.tomAudio.playMeow(1.3);
-        showSpeech('Suprabhat! Full energy aa gayi! ⚡', 2000);
-    }
-
-    // --- DOCTOR CLINIC (MY TALKING TOM 2 FIRST AID) ---
-    const doctorTools = document.querySelectorAll('.tool-item');
-    doctorTools.forEach(tool => {
-        tool.addEventListener('click', () => {
-            const t = tool.dataset.tool;
-            handleDoctorTool(t);
-        });
-    });
-
-    function handleDoctorTool(tool) {
-        if (tool === 'syringe') {
-            tom.eyeState = 'dizzy';
-            tom.scaleY = 1.2;
-            if (window.tomAudio) window.tomAudio.playSlap();
-            showSpeech('Ouch! Injection laga diya! 💉😭', 1800);
-            setTimeout(() => {
-                tom.scaleY = 1.0;
-                cureTom();
-            }, 1000);
-        } else if (tool === 'potion') {
-            if (window.tomAudio) window.tomAudio.playGulpAndBurp();
-            cureTom();
-        } else if (tool === 'bandage') {
-            cureTom();
-        }
-    }
-
-    function cureTom() {
-        state.isSick = false;
-        state.happiness = 100;
-        state.coins += 15;
-        saveState();
-
-        if (window.tomAudio) window.tomAudio.playCureSparkle();
-        createFloatingParticle('💖', canvas.offsetLeft + tom.x, canvas.offsetTop + 160);
-        createFloatingParticle('✨', canvas.offsetLeft + tom.x + 30, canvas.offsetTop + 180);
-
-        showSpeech('Wah! Tom bilkul theek aur tandurust ho gaya! 🩺✨', 2500);
-    }
-
-    // --- VOICE MIMIC & TALKING ENGINE ---
-    const micBtn = document.getElementById('mic-btn');
-    const talkInput = document.getElementById('talk-input');
-    const sendSpeechBtn = document.getElementById('send-speech-btn');
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition = null;
-    if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = 'hi-IN';
-
-        recognition.onstart = () => {
-            micBtn.classList.add('listening');
-            tom.action = 'listening';
-            showSpeech('Sun raha hoon... bolo! 👂', 3000);
-        };
-
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            micBtn.classList.remove('listening');
-            talkInput.value = transcript;
-            tomSpeak(transcript);
-        };
-
-        recognition.onerror = () => {
-            micBtn.classList.remove('listening');
-            tom.action = 'idle';
-            showSpeech('Aawaz nahi suni, dubara kaho ya likho!', 2000);
-        };
-
-        recognition.onend = () => {
-            micBtn.classList.remove('listening');
-            if (tom.action === 'listening') tom.action = 'idle';
-        };
-    }
-
-    if (micBtn) {
-        micBtn.addEventListener('click', () => {
-            if (recognition) {
-                try {
-                    recognition.start();
-                } catch(e) {
-                    recognition.stop();
-                }
-            } else {
-                showSpeech('Mic enable nahi hai, niche likh kar Tom ko bolo! ✍️', 2500);
-            }
-        });
-    }
-
-    function tomSpeak(text) {
-        if (!text) return;
-        tom.action = 'talking';
-        tom.eyeState = 'happy';
-        showSpeech(text, 3500);
-
-        if (window.tomAudio) {
-            window.tomAudio.speakTomVoice(text, 
-                () => { tom.action = 'talking'; }, 
-                () => { 
-                    tom.action = 'idle';
-                    tom.eyeState = 'normal';
-                    tom.mouthState = 'smile';
-                    tom.mouthOpen = 0;
-                }
-            );
-        }
-    }
-
-    if (sendSpeechBtn) {
-        sendSpeechBtn.addEventListener('click', () => {
-            const txt = talkInput.value.trim();
-            if (txt) {
-                tomSpeak(txt);
-                talkInput.value = '';
-            }
-        });
-    }
-
-    if (talkInput) {
-        talkInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const txt = talkInput.value.trim();
-                if (txt) {
-                    tomSpeak(txt);
-                    talkInput.value = '';
-                }
-            }
-        });
-    }
-
-    // Quick Phrases
-    const quickPhrases = document.querySelectorAll('.phrase-pill');
-    quickPhrases.forEach(p => {
-        p.addEventListener('click', () => {
-            tomSpeak(p.dataset.phrase);
-        });
-    });
-
-    // Pet Companion (Squeezer)
-    const petCompanion = document.getElementById('pet-companion');
-    if (petCompanion) {
-        petCompanion.addEventListener('click', () => {
-            if (window.tomAudio) window.tomAudio.playGiggle();
-            createFloatingParticle('⭐', petCompanion.offsetLeft + 20, petCompanion.offsetTop - 20);
-            showSpeech('Tom ka pyara dost Squeezer! 🐹💖', 1800);
-        });
-    }
-
-    // --- WARDROBE & COSTUME SHOP MODAL ---
-    const shopModal = document.getElementById('shop-modal');
-    const openShopBtn = document.getElementById('btn-open-shop');
-    const closeShopBtn = document.getElementById('btn-close-shop');
-    const shopGrid = document.getElementById('shop-grid');
-
-    const shopCatalog = [
-        { id: 'hat_crown', type: 'hat', val: 'crown', name: 'Shahi Crown 👑', price: 50 },
-        { id: 'hat_party', type: 'hat', val: 'party', name: 'Party Hat 🥳', price: 30 },
-        { id: 'hat_cap', type: 'hat', val: 'cap', name: 'Cool Cap 🧢', price: 40 },
-        { id: 'shades', type: 'glasses', val: 'cool_shades', name: 'Kala Chashma 🕶️', price: 60 },
-        { id: 'bowtie', type: 'neck', val: 'red_bowtie', name: 'Red Bowtie 🎀', price: 35 },
-        { id: 'fur_ginger', type: 'fur', val: '#f4a261', name: 'Ginger Fur 🐱', price: 80 },
-        { id: 'fur_black', type: 'fur', val: '#2b2d42', name: 'Black Panther 🐾', price: 90 },
-        { id: 'fur_white', type: 'fur', val: '#e9ecef', name: 'White Snow ❄️', price: 80 },
-        { id: 'reset_style', type: 'reset', val: 'reset', name: 'Default Look 🔄', price: 0 }
+  }
+
+  playBuzzer() {
+    if (!this.enabled) return;
+    this.init();
+    this.playTone(180, 'sawtooth', 0.3, 0.15);
+    setTimeout(() => this.playTone(130, 'sawtooth', 0.4, 0.15), 120);
+  }
+
+  playHeartCatch() {
+    this.playTone(987.77, 'sine', 0.15, 0.12);
+    setTimeout(() => this.playTone(1318.51, 'sine', 0.2, 0.12), 60);
+  }
+
+  playBugHit() {
+    this.playTone(220, 'square', 0.18, 0.1);
+  }
+
+  playRomanticMelody() {
+    if (!this.enabled) return;
+    this.init();
+    // Sweet polyphonic progression (F - G - Em - Am chord arpeggios)
+    const chords = [
+      [349.23, 440.00, 523.25], // F major
+      [392.00, 493.88, 587.33], // G major
+      [329.63, 392.00, 493.88], // E minor
+      [440.00, 523.25, 659.25]  // A minor
     ];
+    let step = 0;
+    const playChordStep = () => {
+      if (currentScreen !== 'screen-proposal') return;
+      const currentChord = chords[step % chords.length];
+      currentChord.forEach((note, i) => {
+        setTimeout(() => this.playTone(note, 'sine', 1.2, 0.06), i * 140);
+      });
+      step++;
+      setTimeout(playChordStep, 1800);
+    };
+    playChordStep();
+  }
+}
 
-    function renderShop() {
-        if (!shopGrid) return;
-        shopGrid.innerHTML = '';
-        shopCatalog.forEach(item => {
-            const isOwned = state.unlockedItems.includes(item.val) || item.price === 0;
-            const isEquipped = state.equipped[item.type] === item.val;
+const audio = new SoundEngine();
 
-            const card = document.createElement('div');
-            card.className = 'shop-item-card' + (isEquipped ? ' equipped' : '');
-            card.innerHTML = `
-                <div class="shop-item-icon">${item.name.split(' ').pop()}</div>
-                <div class="shop-item-name">${item.name}</div>
-                <button class="shop-item-btn ${isEquipped ? 'active' : isOwned ? 'owned' : ''}">
-                    ${isEquipped ? 'Equipped' : isOwned ? 'Wear' : '🪙 ' + item.price}
-                </button>
-            `;
+// ---------------- HAPTIC VIBRATION ----------------
+function triggerVibrate(pattern = [40]) {
+  if ('vibrate' in navigator) {
+    try {
+      navigator.vibrate(pattern);
+    } catch (e) {}
+  }
+}
 
-            card.addEventListener('click', () => {
-                if (item.type === 'reset') {
-                    state.equipped.hat = 'none';
-                    state.equipped.glasses = 'none';
-                    state.equipped.neck = 'none';
-                    state.equipped.fur = '#8e9aaf';
-                    saveState();
-                    renderShop();
-                    return;
-                }
+// ---------------- GLOBAL STATE ----------------
+let currentScreen = 'screen-intro';
+let currentQuestionIndex = 0;
+let loveMeterScore = 20;
 
-                if (isOwned) {
-                    state.equipped[item.type] = (state.equipped[item.type] === item.val) ? 'none' : item.val;
-                } else if (state.coins >= item.price) {
-                    state.coins -= item.price;
-                    state.unlockedItems.push(item.val);
-                    state.equipped[item.type] = item.val;
-                    if (window.tomAudio) window.tomAudio.playCoin();
-                } else {
-                    showSpeech('Coins kam hain! Mini-game khelo! 🪙', 2000);
-                    return;
-                }
-                saveState();
-                renderShop();
-            });
+// Quiz Data with Masti & Cuteness
+const quizQuestions = [
+  {
+    q: "Sawal 1: Fardeen din bhar sabse zyada kya karta hai? 😂",
+    options: [
+      { text: "Pura din padhai aur serious kaam 📚", type: "funny", roast: "Arey arey itna bada safed jhooth! Fardeen aur itni padhai? 😂 Galat jawab!" },
+      { text: "Dosto ke sath gappe marta hai 🍕", type: "funny", roast: "Thoda bohot karta hai, par ye uska main passion nahi hai madam! 😜" },
+      { text: "Sirf aur sirf Zoya ke khayalo me khoya rehta hai 🙈💖", type: "correct", roast: "BINGO! 100% Sach! Fardeen ke har second me sirf tum hi tum ho! ✨" },
+      { text: "Khaata hai aur so jata hai 😴", type: "funny", roast: "Ye toh tumhara routine lag raha hai! Fardeen ka nahi 😂" }
+    ]
+  },
+  {
+    q: "Sawal 2: Zoya ka sabse dangerous weapon kya hai jisse Fardeen ghayal ho jata hai? ⚔️",
+    options: [
+      { text: "Uski killer smile aur cute nakhre 🥺✨", type: "correct", roast: "Sachme! Is weapon ka koi antivirus pure internet par nahi bana! ❤️" },
+      { text: "Ek baar 'Hmm' bolkar ignore karna 💀", type: "funny", roast: "Critical Damage 9999 HP! Fardeen ka dimaag hil jata hai isse 😂" },
+      { text: "Uski gusse wali aankhen 😤", type: "funny", roast: "Gusse me bhi tum cute hi lagti ho, darr bilkul nahi lagta! 😜" },
+      { text: "Baatein ghuma-fira kar bolna 🌀", type: "funny", roast: "Hehehe, par Fardeen fir bhi pyaar se sunta rehta hai! 💖" }
+    ]
+  },
+  {
+    q: "Sawal 3: Agar Fardeen aur Zoya me fight ho jaye, toh galti kiski hogi? 🥊",
+    options: [
+      { text: "Obviously Fardeen ki (Chahe jo ho jaye) 👑", type: "correct", roast: "Universal Truth Rule #1: Zoya is ALWAYS right! Fardeen bina lade sorry bol dega! 😂🤝" },
+      { text: "Kisi ki nahi, dono milkar ice-cream khayenge 🍦", type: "correct", roast: "Super cute! Treat Fardeen ki taraf se pakki rahi! 😋💖" },
+      { text: "Zoya ki galti hogi thodi si 🤏", type: "funny", roast: "Arey system glitch! Zoya ki galti ho hi nahi sakti, Fardeen hi maafi mangega! 🤣" }
+    ]
+  }
+];
 
-            shopGrid.appendChild(card);
-        });
-    }
+// ---------------- DOM ELEMENTS ----------------
+const soundBtn = document.getElementById('sound-btn');
+const soundIcon = document.getElementById('sound-icon');
 
-    if (openShopBtn) openShopBtn.addEventListener('click', () => { renderShop(); shopModal.classList.add('open'); });
-    if (closeShopBtn) closeShopBtn.addEventListener('click', () => shopModal.classList.remove('open'));
+// Sound Toggle Button
+soundBtn.addEventListener('click', () => {
+  audio.enabled = !audio.enabled;
+  soundIcon.textContent = audio.enabled ? '🔊' : '🔇';
+  if (audio.enabled) audio.playClick();
+});
 
-    // --- ARCADE MINI-GAME: "TOM'S SNACK CATCHER" ---
-    const minigameModal = document.getElementById('minigame-modal');
-    const openGameBtn = document.getElementById('btn-open-game');
-    const closeGameBtn = document.getElementById('btn-close-game');
-    const mgCanvas = document.getElementById('minigame-canvas');
-    let mgCtx = null;
-    let mgActive = false;
-    let mgScore = 0;
-    let mgBasketX = 140;
-    let mgSnacks = [];
-    let mgAnimationId = null;
+// Screen Switcher
+function switchScreen(screenId) {
+  document.querySelectorAll('.game-screen').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById(screenId);
+  if (target) {
+    target.classList.add('active');
+    currentScreen = screenId;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
 
-    if (mgCanvas) {
-        mgCtx = mgCanvas.getContext('2d');
-    }
-
-    function startMiniGame() {
-        mgActive = true;
-        mgScore = 0;
-        mgSnacks = [];
-        mgBasketX = mgCanvas.width / 2;
-        minigameModal.classList.add('open');
-        lastSpawnTime = performance.now();
-        miniGameLoop();
-    }
-
-    function stopMiniGame() {
-        mgActive = false;
-        cancelAnimationFrame(mgAnimationId);
-        minigameModal.classList.remove('open');
-    }
-
-    let lastSpawnTime = 0;
-    function miniGameLoop() {
-        if (!mgActive) return;
-        const now = performance.now();
-
-        mgCtx.clearRect(0, 0, mgCanvas.width, mgCanvas.height);
-
-        if (now - lastSpawnTime > 750) {
-            lastSpawnTime = now;
-            const isBomb = Math.random() < 0.2;
-            mgSnacks.push({
-                x: 20 + Math.random() * (mgCanvas.width - 40),
-                y: -20,
-                speed: 2.5 + Math.random() * 2,
-                type: isBomb ? '💣' : ['🐟', '🍔', '🍼', '🍰'][Math.floor(Math.random() * 4)],
-                isBomb: isBomb
-            });
-        }
-
-        for (let i = mgSnacks.length - 1; i >= 0; i--) {
-            const s = mgSnacks[i];
-            s.y += s.speed;
-
-            mgCtx.font = '28px Arial';
-            mgCtx.fillText(s.type, s.x, s.y);
-
-            if (s.y > mgCanvas.height - 45 && s.y < mgCanvas.height - 10 && Math.abs(s.x - mgBasketX) < 35) {
-                if (s.isBomb) {
-                    if (window.tomAudio) window.tomAudio.playSlap();
-                    alert('Boom! Bomb phoot gaya! Final Score: ' + mgScore);
-                    state.coins += Math.floor(mgScore / 2);
-                    saveState();
-                    stopMiniGame();
-                    return;
-                } else {
-                    mgScore += 10;
-                    if (window.tomAudio) window.tomAudio.playCoin();
-                    mgSnacks.splice(i, 1);
-                    continue;
-                }
-            }
-
-            if (s.y > mgCanvas.height) {
-                mgSnacks.splice(i, 1);
-            }
-        }
-
-        // Draw Player Catcher Bowl
-        mgCtx.fillStyle = '#ffb703';
-        mgCtx.beginPath();
-        mgCtx.ellipse(mgBasketX, mgCanvas.height - 25, 35, 14, 0, 0, Math.PI);
-        mgCtx.fill();
-        mgCtx.fillStyle = '#e63946';
-        mgCtx.font = '20px Arial';
-        mgCtx.fillText('🐱', mgBasketX - 10, mgCanvas.height - 18);
-
-        // Draw Score UI
-        mgCtx.fillStyle = '#ffffff';
-        mgCtx.font = 'bold 18px Nunito, sans-serif';
-        mgCtx.fillText('Score: ' + mgScore, 14, 30);
-
-        mgAnimationId = requestAnimationFrame(miniGameLoop);
-    }
-
-    if (openGameBtn) openGameBtn.addEventListener('click', startMiniGame);
-    if (closeGameBtn) closeGameBtn.addEventListener('click', stopMiniGame);
-
-    const btnLeft = document.getElementById('mg-btn-left');
-    const btnRight = document.getElementById('mg-btn-right');
-    if (btnLeft) {
-        btnLeft.addEventListener('pointerdown', () => { mgBasketX = Math.max(35, mgBasketX - 45); });
-    }
-    if (btnRight) {
-        btnRight.addEventListener('pointerdown', () => { mgBasketX = Math.min(mgCanvas.width - 35, mgBasketX + 45); });
-    }
-
-    if (mgCanvas) {
-        mgCanvas.addEventListener('pointermove', (e) => {
-            const rect = mgCanvas.getBoundingClientRect();
-            mgBasketX = Math.max(35, Math.min(mgCanvas.width - 35, e.clientX - rect.left));
-        });
-    }
-
-    // Fullscreen Toggle
-    const fullscreenBtn = document.getElementById('btn-fullscreen');
-    if (fullscreenBtn) {
-        fullscreenBtn.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            } else {
-                document.exitFullscreen().catch(() => {});
-            }
-        });
-    }
-
-    // Sound Toggle
-    const soundBtn = document.getElementById('btn-sound');
-    if (soundBtn) {
-        soundBtn.addEventListener('click', () => {
-            if (window.tomAudio) {
-                const muted = window.tomAudio.toggleMute();
-                soundBtn.textContent = muted ? '🔇' : '🔊';
-            }
-        });
-    }
-
-    // Natural Need Degradation Over Time
-    setInterval(() => {
-        if (!state.isSleeping) {
-            state.hunger = Math.max(0, state.hunger - 1);
-            state.energy = Math.max(0, state.energy - 0.5);
-            state.toilet = Math.min(100, state.toilet + 1);
-            state.hygiene = Math.max(0, state.hygiene - 0.5);
-            saveState();
-        }
-    }, 15000);
-
-    // Initial Setup
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-    updateMetersUI();
-    switchRoom('living');
-    requestAnimationFrame(gameLoop);
-
-    // Welcome greeting
+// ---------------- SCREEN 1: VERIFICATION ----------------
+function verifyIdentity(type) {
+  audio.init();
+  const dialogue = document.getElementById('intro-dialogue');
+  
+  if (type === 'alien') {
+    audio.playBuzzer();
+    triggerVibrate([60, 40, 60]);
+    dialogue.innerHTML = "Hahaha! Alien ho tab bhi Fardeen tumhara hi dimaag khayega! 😂 Chalo ab chup-chaap game shuru karo!";
     setTimeout(() => {
-        showSpeech('Namaste! Main hoon Tom! Mere sath khelo! 😸💖', 3000);
-        if (window.tomAudio) window.tomAudio.playMeow(1.2);
-    }, 600);
+      startQuiz();
+    }, 1500);
+  } else {
+    audio.playSuccess();
+    triggerVibrate([80]);
+    dialogue.innerHTML = "Access Granted! 💖 Welcome Zoya! Fardeen ne ye secret game khas tumhare chehre par muskurahat laane ke liye banaya hai!";
+    setTimeout(() => {
+      startQuiz();
+    }, 1200);
+  }
+}
 
-})();
+// ---------------- SCREEN 2: QUIZ LOGIC ----------------
+function startQuiz() {
+  currentQuestionIndex = 0;
+  loveMeterScore = 25;
+  switchScreen('screen-quiz');
+  loadQuestion();
+}
+
+function loadQuestion() {
+  const qData = quizQuestions[currentQuestionIndex];
+  document.getElementById('quiz-progress').textContent = `QUESTION ${currentQuestionIndex + 1} / ${quizQuestions.length}`;
+  document.getElementById('love-meter-fill').style.width = `${loveMeterScore}%`;
+  document.getElementById('question-text').textContent = qData.q;
+  
+  const optionsContainer = document.getElementById('options-container');
+  optionsContainer.innerHTML = '';
+  document.getElementById('feedback-box').classList.add('hidden');
+
+  qData.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerHTML = `<span class="opt-bullet">✨</span><span>${opt.text}</span>`;
+    btn.onclick = () => handleAnswer(opt, btn);
+    optionsContainer.appendChild(btn);
+  });
+}
+
+function handleAnswer(option, btnElement) {
+  audio.init();
+  const feedbackBox = document.getElementById('feedback-box');
+  const feedbackEmoji = document.getElementById('feedback-emoji');
+  const feedbackText = document.getElementById('feedback-text');
+
+  // Disable all option buttons
+  document.querySelectorAll('.option-btn').forEach(b => b.style.pointerEvents = 'none');
+
+  if (option.type === 'correct') {
+    audio.playSuccess();
+    triggerVibrate([60, 50, 100]);
+    btnElement.classList.add('selected-correct');
+    feedbackEmoji.textContent = '🥰';
+    loveMeterScore = Math.min(100, loveMeterScore + 30);
+  } else {
+    audio.playBuzzer();
+    triggerVibrate([80]);
+    btnElement.classList.add('selected-funny');
+    feedbackEmoji.textContent = '😂';
+    loveMeterScore = Math.min(100, loveMeterScore + 15);
+  }
+
+  feedbackText.textContent = option.roast;
+  feedbackBox.classList.remove('hidden');
+  document.getElementById('love-meter-fill').style.width = `${loveMeterScore}%`;
+}
+
+function nextQuestion() {
+  audio.playClick();
+  currentQuestionIndex++;
+  if (currentQuestionIndex < quizQuestions.length) {
+    loadQuestion();
+  } else {
+    // Move to Scanner
+    switchScreen('screen-scanner');
+    initScanner();
+  }
+}
+
+// ---------------- SCREEN 3: LOVE SCANNER ----------------
+function initScanner() {
+  const zone = document.getElementById('scanner-zone');
+  const counter = document.getElementById('scan-counter');
+  const hint = document.getElementById('scan-hint');
+  const result = document.getElementById('scan-result');
+  let scanInterval = null;
+  let progress = 0;
+
+  const startScan = (e) => {
+    if (e) e.preventDefault();
+    if (progress >= 100) return;
+    audio.init();
+    audio.playTone(400, 'sine', 0.1, 0.05);
+    zone.classList.add('scanning');
+    hint.textContent = "Scanning Crush Frequency... 💓";
+
+    scanInterval = setInterval(() => {
+      progress += 4;
+      counter.textContent = `${progress}%`;
+      triggerVibrate([20]);
+      audio.playTone(300 + progress * 8, 'sine', 0.04, 0.04);
+
+      if (progress >= 100) {
+        clearInterval(scanInterval);
+        zone.classList.remove('scanning');
+        counter.textContent = "999.9%";
+        hint.textContent = "SCAN COMPLETE!";
+        audio.playSuccess();
+        triggerVibrate([100, 50, 150]);
+        result.classList.remove('hidden');
+      }
+    }, 60);
+  };
+
+  const stopScan = () => {
+    if (progress < 100) {
+      clearInterval(scanInterval);
+      zone.classList.remove('scanning');
+      hint.textContent = "Don't let go! Tap & hold again!";
+    }
+  };
+
+  zone.onmousedown = startScan;
+  zone.onmouseup = stopScan;
+  zone.ontouchstart = startScan;
+  zone.ontouchend = stopScan;
+}
+
+function goToMiniGame() {
+  audio.playClick();
+  switchScreen('screen-game');
+}
+
+// ---------------- SCREEN 4: MINI GAME (CATCH HEARTS) ----------------
+let gameScore = 0;
+let gameTimer = 18;
+let gameLoopInterval = null;
+let itemSpawnInterval = null;
+let isGameRunning = false;
+
+function startCatchGame() {
+  audio.init();
+  audio.playClick();
+  document.getElementById('game-start-overlay').style.display = 'none';
+  gameScore = 0;
+  gameTimer = 18;
+  isGameRunning = true;
+  document.getElementById('game-score').textContent = gameScore;
+  document.getElementById('game-timer').textContent = `${gameTimer}s`;
+
+  const arena = document.getElementById('game-arena');
+  const basket = document.getElementById('basket');
+  const itemsLayer = document.getElementById('items-layer');
+  itemsLayer.innerHTML = '';
+
+  // Basket Touch & Mouse Control
+  let basketX = arena.clientWidth / 2;
+
+  const updateBasketPos = (clientX) => {
+    const rect = arena.getBoundingClientRect();
+    let relativeX = clientX - rect.left;
+    relativeX = Math.max(34, Math.min(arena.clientWidth - 34, relativeX));
+    basket.style.left = `${relativeX}px`;
+    basketX = relativeX;
+  };
+
+  arena.ontouchmove = (e) => {
+    e.preventDefault();
+    if (e.touches[0]) updateBasketPos(e.touches[0].clientX);
+  };
+  arena.onmousemove = (e) => {
+    updateBasketPos(e.clientX);
+  };
+
+  // Spawn Falling Items
+  const items = [
+    { emoji: '💖', pts: 10, type: 'heart' },
+    { emoji: '💕', pts: 10, type: 'heart' },
+    { emoji: '⭐', pts: 15, type: 'star' },
+    { emoji: '💌', pts: 20, type: 'letter' },
+    { emoji: '🐛', pts: -5, type: 'bug' } // Overthinking bug
+  ];
+
+  itemSpawnInterval = setInterval(() => {
+    if (!isGameRunning) return;
+    const randomItem = items[Math.floor(Math.random() * items.length)];
+    const itemEl = document.createElement('div');
+    itemEl.className = 'game-item';
+    itemEl.textContent = randomItem.emoji;
+    itemEl.dataset.type = randomItem.type;
+    itemEl.dataset.pts = randomItem.pts;
+
+    const startLeft = Math.random() * (arena.clientWidth - 40) + 20;
+    itemEl.style.left = `${startLeft}px`;
+    itemEl.style.top = '-40px';
+    itemsLayer.appendChild(itemEl);
+
+    // Fall animation
+    let topY = -40;
+    const speed = 3.2 + Math.random() * 2.5;
+
+    const fall = setInterval(() => {
+      if (!isGameRunning) {
+        clearInterval(fall);
+        itemEl.remove();
+        return;
+      }
+      topY += speed;
+      itemEl.style.top = `${topY}px`;
+
+      // Collision Detection with basket
+      if (topY >= arena.clientHeight - 65 && topY <= arena.clientHeight - 15) {
+        const itemLeft = parseFloat(itemEl.style.left);
+        if (Math.abs(itemLeft - basketX) < 45) {
+          // Caught!
+          clearInterval(fall);
+          itemEl.remove();
+          const pts = parseInt(randomItem.pts);
+          gameScore = Math.max(0, gameScore + pts);
+          document.getElementById('game-score').textContent = gameScore;
+
+          if (pts > 0) {
+            audio.playHeartCatch();
+            triggerVibrate([30]);
+            basket.querySelector('.basket-face').textContent = '😍';
+          } else {
+            audio.playBugHit();
+            triggerVibrate([70]);
+            basket.querySelector('.basket-face').textContent = '😵';
+          }
+          setTimeout(() => {
+            if (basket) basket.querySelector('.basket-face').textContent = '🥰';
+          }, 300);
+        }
+      }
+
+      if (topY > arena.clientHeight) {
+        clearInterval(fall);
+        itemEl.remove();
+      }
+    }, 20);
+
+  }, 600);
+
+  // Countdown timer
+  gameLoopInterval = setInterval(() => {
+    gameTimer--;
+    document.getElementById('game-timer').textContent = `${gameTimer}s`;
+
+    if (gameTimer <= 0 || gameScore >= 60) {
+      endCatchGame();
+    }
+  }, 1000);
+}
+
+function endCatchGame() {
+  isGameRunning = false;
+  clearInterval(gameLoopInterval);
+  clearInterval(itemSpawnInterval);
+  audio.playSuccess();
+  triggerVibrate([80, 50, 120]);
+
+  setTimeout(() => {
+    switchScreen('screen-cipher');
+  }, 700);
+}
+
+// ---------------- SCREEN 5: CIPHER UNLOCK ----------------
+let enteredKeys = [];
+const correctCode = ['Z', 'O', 'Y', 'A'];
+
+function pressKey(letter) {
+  audio.init();
+  if (enteredKeys.length < 4) {
+    audio.playClick();
+    triggerVibrate([30]);
+    enteredKeys.push(letter);
+    updateCipherSlots();
+
+    if (enteredKeys.length === 4) {
+      checkCipher();
+    }
+  }
+}
+
+function clearKeys() {
+  audio.playClick();
+  enteredKeys = [];
+  updateCipherSlots();
+  document.getElementById('cipher-message').textContent = "Sahi letters tap karo...";
+}
+
+function updateCipherSlots() {
+  for (let i = 0; i < 4; i++) {
+    const slot = document.getElementById(`slot-${i}`);
+    slot.textContent = enteredKeys[i] ? enteredKeys[i] : '_';
+  }
+}
+
+function checkCipher() {
+  const isMatch = enteredKeys.every((val, index) => val === correctCode[index]);
+  const msg = document.getElementById('cipher-message');
+
+  if (isMatch) {
+    audio.playSuccess();
+    triggerVibrate([100, 60, 150]);
+    msg.textContent = "ACCESS GRANTED! Fardeen ka dil unlock ho gaya! 💖🔓";
+    msg.style.color = "var(--neon-cyan)";
+    setTimeout(() => {
+      switchScreen('screen-proposal');
+      initProposalScreen();
+    }, 1200);
+  } else {
+    audio.playBuzzer();
+    triggerVibrate([80, 50, 80]);
+    msg.textContent = "Oops! Galat password! Hint: Z-O-Y-A 😜";
+    msg.style.color = "var(--neon-pink)";
+    setTimeout(() => {
+      clearKeys();
+    }, 1000);
+  }
+}
+
+// ---------------- SCREEN 6: THE PROPOSAL & KHAT ----------------
+function initProposalScreen() {
+  initFxCanvas();
+}
+
+function openLoveLetter() {
+  audio.init();
+  audio.playSuccess();
+  triggerVibrate([100]);
+  document.getElementById('envelope-sealed').style.display = 'none';
+  document.getElementById('letter-content').classList.remove('hidden');
+  audio.playRomanticMelody();
+  setupRunawayButton();
+}
+
+// The Hilarious Runaway "Sochungi 😏" Button
+function setupRunawayButton() {
+  const noBtn = document.getElementById('no-btn');
+  const noBtnText = document.getElementById('no-btn-text');
+  const funnyLines = [
+    "Arey pakad ke dikhao! 😂",
+    "Fardeen ko No bolna mana hai! 😜",
+    "Button bhaag gaya lol! 🏃‍♂️💨",
+    "Itna bhav mat khao Zoya! 🤣",
+    "Pyaar se YES dabao na! 💖",
+    "Error: Rejection module crashed! 🤖",
+    "Haath me nahi aaunga! 😝"
+  ];
+  let dodgeCount = 0;
+
+  const dodge = (e) => {
+    if (e) e.preventDefault();
+    audio.playTone(600 + Math.random() * 400, 'sine', 0.08, 0.08);
+    triggerVibrate([30]);
+
+    dodgeCount++;
+    noBtnText.textContent = funnyLines[dodgeCount % funnyLines.length];
+
+    // Calculate safe random coordinates inside screen
+    const maxOffset = 110;
+    const randX = (Math.random() - 0.5) * maxOffset * 1.8;
+    const randY = (Math.random() - 0.5) * maxOffset;
+
+    noBtn.style.transform = `translate(${randX}px, ${randY}px) scale(0.95)`;
+  };
+
+  noBtn.onmouseenter = dodge;
+  noBtn.ontouchstart = dodge;
+  noBtn.onclick = dodge;
+}
+
+// Accept Proposal (YES!)
+function acceptProposal() {
+  audio.init();
+  audio.playSuccess();
+  triggerVibrate([150, 80, 200, 100, 300]);
+
+  document.getElementById('letter-content').classList.add('hidden');
+  document.getElementById('celebration-box').classList.remove('hidden');
+
+  // Launch Super Confetti & Fireworks!
+  launchCelebrationParticles();
+}
+
+// ---------------- CONFETTI & FIREWORKS ENGINE ----------------
+let particles = [];
+let animFrameId = null;
+
+function initFxCanvas() {
+  const canvas = document.getElementById('fx-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const resize = () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  };
+  resize();
+  window.addEventListener('resize', resize);
+}
+
+function launchCelebrationParticles() {
+  const canvas = document.getElementById('fx-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  particles = [];
+
+  const colors = ['#ff2d75', '#00f0ff', '#ffd166', '#ffffff', '#b5179e', '#ff70a6'];
+
+  // Spawn 150 particles
+  for (let i = 0; i < 160; i++) {
+    particles.push({
+      x: canvas.width / 2,
+      y: canvas.height / 2 + 50,
+      vx: (Math.random() - 0.5) * 16,
+      vy: (Math.random() - 0.8) * 18,
+      size: Math.random() * 8 + 4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      alpha: 1,
+      decay: Math.random() * 0.008 + 0.004,
+      isHeart: Math.random() > 0.4
+    });
+  }
+
+  const loop = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    particles.forEach((p, idx) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.28; // gravity
+      p.alpha -= p.decay;
+
+      if (p.alpha <= 0) {
+        particles.splice(idx, 1);
+        return;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+
+      if (p.isHeart) {
+        // Draw tiny glowing heart
+        ctx.font = `${p.size * 2}px sans-serif`;
+        ctx.fillText('💖', p.x, p.y);
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+
+    if (particles.length > 0) {
+      animFrameId = requestAnimationFrame(loop);
+    }
+  };
+
+  loop();
+}
+
+// ---------------- SHARE & RESTART ----------------
+function shareWithFardeen() {
+  const msg = encodeURIComponent("Fardeen! Maine tumhara Cyber Game khela aur mera answer YES hai! 💖💍 Tum sach me bohot cute ho!");
+  window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+}
+
+function restartGame() {
+  audio.playClick();
+  currentQuestionIndex = 0;
+  enteredKeys = [];
+  document.getElementById('celebration-box').classList.add('hidden');
+  document.getElementById('letter-content').classList.add('hidden');
+  document.getElementById('envelope-sealed').style.display = 'block';
+  document.getElementById('game-start-overlay').style.display = 'flex';
+  switchScreen('screen-intro');
+}
+
+// Background Twinkling Cyber Stars
+function createCyberStars() {
+  const container = document.getElementById('stars-container');
+  if (!container) return;
+  for (let i = 0; i < 40; i++) {
+    const star = document.createElement('div');
+    star.style.position = 'absolute';
+    star.style.width = `${Math.random() * 3 + 1}px`;
+    star.style.height = star.style.width;
+    star.style.background = Math.random() > 0.5 ? '#00f0ff' : '#ff2d75';
+    star.style.borderRadius = '50%';
+    star.style.top = `${Math.random() * 100}%`;
+    star.style.left = `${Math.random() * 100}%`;
+    star.style.opacity = Math.random() * 0.7 + 0.3;
+    star.style.boxShadow = `0 0 6px ${star.style.background}`;
+    container.appendChild(star);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  createCyberStars();
+});

@@ -1090,6 +1090,7 @@ private fun MessageBubble(
                         .widthIn(max = (560 * fontScale).dp)
                         .clip(RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp))
                         .background(ex.userBubble)
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp))
                         .padding(horizontal = (14 * fontScale).dp, vertical = (10 * fontScale).dp)
                 ) {
                     SelectionContainer {
@@ -1099,7 +1100,7 @@ private fun MessageBubble(
                                 fontSize = (15.5f * fontScale).sp,
                                 lineHeight = (22f * fontScale).sp
                             ),
-                            color = ex.onUserBubble
+                            color = Color.White
                         )
                     }
                 }

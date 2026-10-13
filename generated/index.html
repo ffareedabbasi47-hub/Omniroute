@@ -1,1745 +1,260 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#080812">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>FARDEEN // CYBERPUNK WORKFLOW OS</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --neon-cyan: #00f0ff;
-            --neon-pink: #ff0055;
-            --neon-purple: #a855f7;
-            --neon-green: #00ff66;
-            --neon-amber: #ffb703;
-            --bg-dark: #080812;
-            --glass-bg: rgba(16, 18, 35, 0.65);
-            --glass-bg-hover: rgba(25, 28, 55, 0.78);
-            --glass-border: rgba(0, 240, 255, 0.22);
-            --glass-border-glow: rgba(0, 240, 255, 0.6);
-            --glass-border-pink: rgba(255, 0, 85, 0.35);
-            --text-main: #f0f4fc;
-            --text-dim: #94a3b8;
-            --font-orbitron: 'Orbitron', -apple-system, sans-serif;
-            --font-rajdhani: 'Rajdhani', sans-serif;
-            --font-mono: 'Share Tech Mono', monospace;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            font-family: var(--font-rajdhani);
-            min-height: 100vh;
-            overflow-x: hidden;
-            position: relative;
-            font-size: 16px;
-            letter-spacing: 0.5px;
-        }
-
-        /* Ambient Cyber Canvas */
-        #cyber-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        /* Scanline Overlay */
-        .scanlines {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: linear-gradient(rgba(18, 16, 38, 0) 50%, rgba(0, 0, 0, 0.35) 50%), linear-gradient(90deg, rgba(255, 0, 85, 0.03), rgba(0, 240, 255, 0.03));
-            background-size: 100% 4px, 6px 100%;
-            z-index: 1;
-            pointer-events: none;
-            opacity: 0.8;
-        }
-
-        .ambient-glow {
-            position: fixed;
-            border-radius: 50%;
-            filter: blur(120px);
-            z-index: 0;
-            pointer-events: none;
-            opacity: 0.35;
-            animation: pulse-glow 8s ease-in-out infinite alternate;
-        }
-        .glow-1 {
-            top: -10%;
-            left: -10%;
-            width: 55vw;
-            height: 55vw;
-            background: radial-gradient(circle, var(--neon-cyan), transparent 70%);
-        }
-        .glow-2 {
-            bottom: -15%;
-            right: -10%;
-            width: 60vw;
-            height: 60vw;
-            background: radial-gradient(circle, var(--neon-pink), transparent 70%);
-            animation-delay: -4s;
-        }
-
-        @keyframes pulse-glow {
-            0% { transform: scale(0.9) translate(0, 0); opacity: 0.25; }
-            100% { transform: scale(1.15) translate(40px, 30px); opacity: 0.45; }
-        }
-
-        /* Glassmorphism Generic Class */
-        .glass-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            box-shadow: 0 10px 35px 0 rgba(0, 0, 0, 0.5), inset 0 0 15px 0 rgba(0, 240, 255, 0.04);
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .glass-panel:hover {
-            border-color: var(--glass-border-glow);
-            box-shadow: 0 14px 45px 0 rgba(0, 0, 0, 0.65), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 20px rgba(0, 240, 255, 0.08);
-        }
-
-        .glass-panel::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-pink), transparent);
-            opacity: 0.6;
-        }
-
-        /* Main Container */
-        .app-container {
-            position: relative;
-            z-index: 2;
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 16px 20px 80px;
-        }
-
-        /* Navigation & Top HUD */
-        header.hud-nav {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            padding: 16px 24px;
-            margin-bottom: 24px;
-            border-radius: 20px;
-        }
-
-        .brand-zone {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .brand-logo {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(255, 0, 85, 0.3));
-            border: 2px solid var(--neon-cyan);
-            border-radius: 12px;
-            display: grid;
-            place-items: center;
-            font-family: var(--font-orbitron);
-            font-size: 22px;
-            font-weight: 900;
-            color: #fff;
-            text-shadow: 0 0 12px var(--neon-cyan);
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
-            animation: logo-glow 3s infinite alternate;
-        }
-
-        @keyframes logo-glow {
-            0% { box-shadow: 0 0 10px rgba(0, 240, 255, 0.3); border-color: var(--neon-cyan); }
-            100% { box-shadow: 0 0 22px rgba(255, 0, 85, 0.6); border-color: var(--neon-pink); }
-        }
-
-        .brand-details h1 {
-            font-family: var(--font-orbitron);
-            font-size: 20px;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .brand-details h1 .tag-highlight {
-            color: var(--neon-cyan);
-            text-shadow: 0 0 10px var(--neon-cyan);
-        }
-
-        .brand-details p {
-            font-family: var(--font-mono);
-            font-size: 13px;
-            color: var(--text-dim);
-            letter-spacing: 1px;
-        }
-
-        .hud-actions {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        .hud-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 14px;
-            background: rgba(0, 240, 255, 0.08);
-            border: 1px solid rgba(0, 240, 255, 0.25);
-            border-radius: 30px;
-            font-family: var(--font-mono);
-            font-size: 13px;
-            color: var(--neon-cyan);
-        }
-
-        .live-pulse {
-            width: 8px;
-            height: 8px;
-            background-color: var(--neon-green);
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--neon-green);
-            animation: pulse-dot 1.5s infinite;
-        }
-
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.3; transform: scale(0.7); }
-        }
-
-        .cyber-btn {
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(255, 0, 85, 0.15));
-            border: 1px solid var(--neon-cyan);
-            color: #fff;
-            padding: 10px 18px;
-            font-family: var(--font-orbitron);
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            text-decoration: none;
-            box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
-        }
-
-        .cyber-btn:hover, .cyber-btn:active {
-            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
-            color: #080812;
-            border-color: #fff;
-            box-shadow: 0 0 25px rgba(0, 240, 255, 0.6);
-            transform: translateY(-2px);
-        }
-
-        .cyber-btn-pink {
-            border-color: var(--neon-pink);
-            box-shadow: 0 0 12px rgba(255, 0, 85, 0.25);
-        }
-        .cyber-btn-pink:hover, .cyber-btn-pink:active {
-            background: linear-gradient(135deg, var(--neon-pink), var(--neon-amber));
-            box-shadow: 0 0 25px rgba(255, 0, 85, 0.6);
-        }
-
-        .cyber-btn-sm {
-            padding: 6px 12px;
-            font-size: 11px;
-            border-radius: 8px;
-        }
-
-        /* Hero / Overview Banner */
-        .hero-banner {
-            padding: 30px;
-            margin-bottom: 24px;
-            display: grid;
-            grid-template-columns: 1.4fr 1fr;
-            gap: 28px;
-            align-items: center;
-        }
-
-        @media (max-width: 900px) {
-            .hero-banner {
-                grid-template-columns: 1fr;
-                padding: 24px 20px;
-            }
-        }
-
-        .hero-info .tagline {
-            font-family: var(--font-mono);
-            color: var(--neon-cyan);
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .hero-info h2 {
-            font-family: var(--font-orbitron);
-            font-size: clamp(26px, 4vw, 38px);
-            font-weight: 900;
-            line-height: 1.2;
-            margin-bottom: 14px;
-            text-transform: uppercase;
-        }
-
-        .gradient-text {
-            background: linear-gradient(135deg, #fff 20%, var(--neon-cyan) 60%, var(--neon-pink) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .hero-info p.lead {
-            font-size: 17px;
-            line-height: 1.6;
-            color: var(--text-dim);
-            margin-bottom: 22px;
-            max-width: 600px;
-        }
-
-        .contact-quick-pill {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 14px;
-            padding: 14px 18px;
-            background: rgba(10, 12, 28, 0.7);
-            border: 1px dashed var(--neon-cyan);
-            border-radius: 12px;
-            margin-top: 15px;
-        }
-
-        .contact-phone-display {
-            font-family: var(--font-mono);
-            font-size: 19px;
-            font-weight: 700;
-            color: var(--neon-cyan);
-            letter-spacing: 1.5px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* Developer Identity Card */
-        .dev-badge-card {
-            background: rgba(22, 25, 48, 0.7);
-            border: 1px solid rgba(255, 0, 85, 0.35);
-            border-radius: 18px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            position: relative;
-        }
-
-        .dev-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .dev-avatar {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple), var(--neon-pink));
-            padding: 3px;
-            position: relative;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
-        }
-
-        .dev-avatar-inner {
-            width: 100%;
-            height: 100%;
-            background: #0d0d1a;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: var(--font-orbitron);
-            font-size: 26px;
-            font-weight: 900;
-            color: var(--neon-cyan);
-        }
-
-        .dev-title h3 {
-            font-family: var(--font-orbitron);
-            font-size: 20px;
-            color: #fff;
-            letter-spacing: 1px;
-        }
-
-        .dev-title .role-sub {
-            font-family: var(--font-mono);
-            color: var(--neon-pink);
-            font-size: 13px;
-            letter-spacing: 1px;
-        }
-
-        .dev-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 4px;
-        }
-
-        .stat-box {
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-            padding: 10px 8px;
-            text-align: center;
-        }
-
-        .stat-box .val {
-            font-family: var(--font-orbitron);
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--neon-cyan);
-        }
-
-        .stat-box .lbl {
-            font-size: 11px;
-            color: var(--text-dim);
-            font-family: var(--font-mono);
-            text-transform: uppercase;
-        }
-
-        /* Interactive Pipeline Visualizer */
-        .section-title {
-            font-family: var(--font-orbitron);
-            font-size: 20px;
-            font-weight: 800;
-            color: #fff;
-            letter-spacing: 1.5px;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .section-title .accent {
-            color: var(--neon-cyan);
-        }
-
-        .pipeline-card {
-            padding: 24px;
-            margin-bottom: 28px;
-        }
-
-        .pipeline-track {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            overflow-x: auto;
-            padding: 20px 10px;
-            gap: 16px;
-            scrollbar-width: thin;
-            scrollbar-color: var(--neon-cyan) transparent;
-        }
-
-        .pipeline-track::-webkit-scrollbar {
-            height: 6px;
-        }
-        .pipeline-track::-webkit-scrollbar-thumb {
-            background: var(--neon-cyan);
-            border-radius: 10px;
-        }
-
-        .pipe-node {
-            flex: 0 0 180px;
-            background: rgba(14, 16, 32, 0.85);
-            border: 1px solid rgba(0, 240, 255, 0.3);
-            border-radius: 14px;
-            padding: 16px 14px;
-            position: relative;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-
-        .pipe-node.active-step {
-            border-color: var(--neon-cyan);
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
-            transform: scale(1.03);
-        }
-
-        .pipe-node.success-step {
-            border-color: var(--neon-green);
-            box-shadow: 0 0 15px rgba(0, 255, 102, 0.3);
-        }
-
-        .node-step-num {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            color: var(--neon-cyan);
-            margin-bottom: 6px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .node-title {
-            font-family: var(--font-orbitron);
-            font-size: 14px;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: 6px;
-        }
-
-        .node-desc {
-            font-size: 12px;
-            color: var(--text-dim);
-            line-height: 1.4;
-        }
-
-        .node-status-bar {
-            margin-top: 10px;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .node-status-fill {
-            height: 100%;
-            width: 0%;
-            background: var(--neon-cyan);
-            transition: width 0.4s ease;
-        }
-
-        .pipe-connector {
-            flex: 0 0 40px;
-            height: 2px;
-            background: linear-gradient(90deg, rgba(0, 240, 255, 0.3), rgba(255, 0, 85, 0.5));
-            position: relative;
-        }
-
-        .pipe-connector::after {
-            content: '►';
-            position: absolute;
-            top: -8px;
-            right: 12px;
-            font-size: 10px;
-            color: var(--neon-cyan);
-            animation: arrow-slide 1.5s infinite;
-        }
-
-        @keyframes arrow-slide {
-            0% { transform: translateX(-15px); opacity: 0; }
-            50% { opacity: 1; }
-            100% { transform: translateX(15px); opacity: 0; }
-        }
-
-        /* Kanban Workflow Board */
-        .kanban-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 18px;
-            margin-bottom: 28px;
-        }
-
-        @media (max-width: 1100px) {
-            .kanban-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 640px) {
-            .kanban-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .kanban-col {
-            background: rgba(13, 15, 30, 0.65);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            min-height: 420px;
-        }
-
-        .col-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding-bottom: 12px;
-            margin-bottom: 14px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .col-title {
-            font-family: var(--font-orbitron);
-            font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .col-count {
-            background: rgba(0, 240, 255, 0.15);
-            color: var(--neon-cyan);
-            padding: 2px 8px;
-            border-radius: 20px;
-            font-family: var(--font-mono);
-            font-size: 12px;
-        }
-
-        .task-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            flex-grow: 1;
-        }
-
-        .task-card {
-            background: rgba(20, 23, 44, 0.85);
-            border: 1px solid rgba(0, 240, 255, 0.15);
-            border-radius: 12px;
-            padding: 14px;
-            transition: all 0.25s ease;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .task-card:hover {
-            border-color: var(--neon-cyan);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 240, 255, 0.2);
-        }
-
-        .task-priority {
-            display: inline-block;
-            font-family: var(--font-mono);
-            font-size: 10px;
-            padding: 2px 7px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        .p-high { background: rgba(255, 0, 85, 0.2); color: var(--neon-pink); border: 1px solid rgba(255, 0, 85, 0.4); }
-        .p-med { background: rgba(255, 183, 3, 0.2); color: var(--neon-amber); border: 1px solid rgba(255, 183, 3, 0.4); }
-        .p-normal { background: rgba(0, 240, 255, 0.2); color: var(--neon-cyan); border: 1px solid rgba(0, 240, 255, 0.4); }
-
-        .task-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 8px;
-            line-height: 1.35;
-        }
-
-        .task-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-family: var(--font-mono);
-            font-size: 11px;
-            color: var(--text-dim);
-        }
-
-        .task-actions {
-            display: flex;
-            gap: 6px;
-            margin-top: 10px;
-            padding-top: 8px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .task-move-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: var(--text-main);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            cursor: pointer;
-            font-family: var(--font-mono);
-            transition: all 0.2s;
-        }
-
-        .task-move-btn:hover {
-            background: var(--neon-cyan);
-            color: #080812;
-            border-color: var(--neon-cyan);
-        }
-
-        /* Two Column Lower Section (Terminal & Services) */
-        .bottom-grid {
-            display: grid;
-            grid-template-columns: 1.1fr 0.9fr;
-            gap: 24px;
-            margin-bottom: 28px;
-        }
-
-        @media (max-width: 900px) {
-            .bottom-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Cyber Terminal Console */
-        .terminal-panel {
-            padding: 20px;
-        }
-
-        .terminal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--neon-cyan);
-        }
-
-        .term-dots {
-            display: flex;
-            gap: 6px;
-        }
-        .term-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-        .dot-r { background: var(--neon-pink); }
-        .dot-y { background: var(--neon-amber); }
-        .dot-g { background: var(--neon-green); }
-
-        .terminal-screen {
-            background: rgba(5, 7, 18, 0.9);
-            border: 1px solid rgba(0, 240, 255, 0.15);
-            border-radius: 10px;
-            padding: 14px;
-            height: 240px;
-            overflow-y: auto;
-            font-family: var(--font-mono);
-            font-size: 13px;
-            line-height: 1.6;
-            color: #a7f3d0;
-            scrollbar-width: thin;
-        }
-
-        .terminal-screen .log-warn { color: var(--neon-amber); }
-        .terminal-screen .log-cyan { color: var(--neon-cyan); }
-        .terminal-screen .log-pink { color: var(--neon-pink); }
-
-        .terminal-cmd-bar {
-            display: flex;
-            gap: 10px;
-            margin-top: 12px;
-        }
-
-        .terminal-input {
-            flex-grow: 1;
-            background: rgba(10, 12, 28, 0.8);
-            border: 1px solid rgba(0, 240, 255, 0.3);
-            border-radius: 8px;
-            padding: 10px 14px;
-            color: #fff;
-            font-family: var(--font-mono);
-            font-size: 13px;
-            outline: none;
-        }
-
-        .terminal-input:focus {
-            border-color: var(--neon-cyan);
-            box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
-        }
-
-        /* Services & Direct Inquiry */
-        .services-panel {
-            padding: 24px;
-        }
-
-        .service-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 20px;
-        }
-
-        .service-pill {
-            background: rgba(0, 240, 255, 0.08);
-            border: 1px solid rgba(0, 240, 255, 0.2);
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .contact-form-glass {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .glass-input, .glass-textarea {
-            width: 100%;
-            background: rgba(12, 14, 30, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 10px;
-            padding: 12px 14px;
-            color: #fff;
-            font-family: var(--font-rajdhani);
-            font-size: 15px;
-            outline: none;
-            transition: all 0.2s;
-        }
-
-        .glass-input:focus, .glass-textarea:focus {
-            border-color: var(--neon-pink);
-            box-shadow: 0 0 12px rgba(255, 0, 85, 0.3);
-        }
-
-        /* Modal For Adding Task */
-        .cyber-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(8px);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .cyber-modal.open {
-            display: flex;
-        }
-
-        .modal-content {
-            background: var(--glass-bg);
-            backdrop-filter: blur(25px);
-            border: 2px solid var(--neon-cyan);
-            border-radius: 20px;
-            padding: 28px;
-            max-width: 480px;
-            width: 100%;
-            box-shadow: 0 0 40px rgba(0, 240, 255, 0.35);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .modal-header h3 {
-            font-family: var(--font-orbitron);
-            color: var(--neon-cyan);
-            font-size: 18px;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-dim);
-            font-size: 24px;
-            cursor: pointer;
-        }
-
-        /* Toast Notification */
-        .cyber-toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: rgba(14, 18, 40, 0.95);
-            border: 1px solid var(--neon-cyan);
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
-            border-radius: 12px;
-            padding: 14px 22px;
-            font-family: var(--font-mono);
-            color: #fff;
-            z-index: 9999;
-            transform: translateY(120px);
-            opacity: 0;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        .cyber-toast.show {
-            transform: translateY(0);
-            opacity: 1;
-        }
-
-        /* Footer */
-        footer.hud-footer {
-            margin-top: 30px;
-            padding: 20px 24px;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            border-radius: 16px;
-            font-family: var(--font-mono);
-            font-size: 13px;
-            color: var(--text-dim);
-        }
-
-        .footer-credits strong {
-            color: var(--neon-cyan);
-        }
-
-        .footer-phone a {
-            color: var(--neon-pink);
-            text-decoration: none;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cyber-Heart: Zoya & Fardeen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Ambient Cyber Background -->
+  <div class="cyber-bg">
+    <div class="grid-overlay"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+    <div id="stars-container"></div>
+  </div>
 
-    <!-- Cyber Background Elements -->
-    <canvas id="cyber-canvas"></canvas>
-    <div class="scanlines"></div>
-    <div class="ambient-glow glow-1"></div>
-    <div class="ambient-glow glow-2"></div>
+  <!-- Audio Toggle & HUD Header -->
+  <header class="cyber-hud">
+    <div class="hud-status">
+      <span class="pulse-dot"></span>
+      <span class="hud-text">STATUS: <span class="neon-pink">CRUSH PROTOCOL ACTIVE</span></span>
+    </div>
+    <div class="hud-actions">
+      <button id="sound-btn" class="hud-btn" title="Sound Toggle">
+        <span id="sound-icon">🔊</span>
+      </button>
+    </div>
+  </header>
 
-    <div class="app-container">
+  <!-- Main App Shell -->
+  <main class="app-container">
+
+    <!-- SCREEN 1: INTRO / CYBER SECURITY VERIFICATION -->
+    <section id="screen-intro" class="game-screen active">
+      <div class="glass-card main-card">
+        <div class="badge-tag">CYBER-SECURITY SCAN v4.2</div>
+        <div class="cyber-avatar">
+          <div class="avatar-ring"></div>
+          <span class="avatar-emoji">💖</span>
+        </div>
+        <h1 class="glitch-title" data-text="HALT! WHO GOES THERE?">HALT! WHO GOES THERE?</h1>
+        <p class="subtitle">System Security Warning: Ek behad cute ladki ne Fardeen ke heart server ko hack kar liya hai! 🚨</p>
         
-        <!-- Header HUD -->
-        <header class="glass-panel hud-nav">
-            <div class="brand-zone">
-                <div class="brand-logo">FD</div>
-                <div class="brand-details">
-                    <h1>FARDEEN <span class="tag-highlight">DEVELOPER</span></h1>
-                    <p>SYSTEM PROTOCOL // CYBERPUNK WORKFLOW OS</p>
-                </div>
+        <div class="dialogue-box">
+          <p id="intro-dialogue">Pehchan batao apni: Kya tum sach me <strong>Zoya</strong> ho? Ya Fardeen ko satane aayi koi AI robot? 😂</p>
+        </div>
+
+        <div class="button-group">
+          <button class="cyber-btn pink-btn" onclick="verifyIdentity('real')">
+            <span class="btn-text">Haan baba, asli Zoya mai hi hoon 💅</span>
+            <span class="btn-glare"></span>
+          </button>
+          <button class="cyber-btn cyan-btn" onclick="verifyIdentity('alien')">
+            <span class="btn-text">Alien hoon, Fardeen ka dimaag khane aayi hoon 👽</span>
+            <span class="btn-glare"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: MAJEDAR SAWAL-JAWAB (QUIZ) -->
+    <section id="screen-quiz" class="game-screen">
+      <div class="glass-card quiz-card">
+        <div class="quiz-header">
+          <span class="step-indicator" id="quiz-progress">QUESTION 1 / 3</span>
+          <div class="love-meter">
+            <span class="meter-label">Crush Sync:</span>
+            <div class="meter-bar"><div class="meter-fill" id="love-meter-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="question-container">
+          <h2 id="question-text" class="question-title">Loading Question...</h2>
+          <div id="options-container" class="options-grid"></div>
+        </div>
+
+        <div id="feedback-box" class="feedback-box hidden">
+          <div class="feedback-content">
+            <span id="feedback-emoji" class="feedback-emoji">😜</span>
+            <p id="feedback-text" class="feedback-text">Nice try!</p>
+          </div>
+          <button id="next-q-btn" class="cyber-btn purple-btn" onclick="nextQuestion()">Aage Badho 👉</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 3: LOVE COMPATIBILITY SCANNER -->
+    <section id="screen-scanner" class="game-screen">
+      <div class="glass-card scanner-card">
+        <div class="badge-tag">QUANTUM LOVE SCANNER</div>
+        <h2>FARDEEN + ZOYA COMPATIBILITY</h2>
+        <p class="subtitle">Screen par apna thumb tap & hold karke rakho connection check karne ke liye! ✨</p>
+
+        <div class="scanner-zone" id="scanner-zone">
+          <div class="fingerprint-box">
+            <div class="scan-laser" id="scan-laser"></div>
+            <div class="fingerprint-icon">👆</div>
+          </div>
+          <div class="scan-counter" id="scan-counter">0%</div>
+          <p class="scan-hint" id="scan-hint">Hold Finger Here...</p>
+        </div>
+
+        <div id="scan-result" class="scan-result hidden">
+          <div class="match-score">999.9% INFINITE MATCH! 🚀❤️</div>
+          <p class="result-roast">"System Overheated! AI ke hisaab se Zoya ke nakhre aur Fardeen ka pyaar 100% rab ne bana di jodi level pe sync ho chuke hain!" 😂</p>
+          <button class="cyber-btn pink-btn" onclick="goToMiniGame()">Chalo Next Challenge Pe 🎮</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 4: MINI-GAME (CATCH THE HEARTS CHALLENGE) -->
+    <section id="screen-game" class="game-screen">
+      <div class="glass-card game-card">
+        <div class="game-stats-bar">
+          <div class="stat-pill"><span class="icon">💖</span> Score: <span id="game-score" class="stat-num">0</span></div>
+          <div class="stat-pill"><span class="icon">⏱️</span> Time: <span id="game-timer" class="stat-num">18s</span></div>
+          <div class="stat-pill target-pill">Goal: <span class="stat-num">60</span></div>
+        </div>
+
+        <div class="game-instruction">
+          <p>💖 Fardeen ke Hearts pakdo (+10)! 💥 Overthinking Bugs se bacho (-5)!</p>
+        </div>
+
+        <div class="game-arena" id="game-arena">
+          <div class="basket" id="basket">
+            <span class="basket-face">🥰</span>
+            <div class="basket-glow"></div>
+          </div>
+          <div id="items-layer"></div>
+          <div id="game-start-overlay" class="game-start-overlay">
+            <div class="overlay-modal">
+              <h3>Speed Test For Zoya! ⚡</h3>
+              <p>Touch & drag karke basket se girte hue hearts catch karo!</p>
+              <button class="cyber-btn pink-btn" onclick="startCatchGame()">START GAME 🚀</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-            <div class="hud-actions">
-                <div class="hud-badge">
-                    <span class="live-pulse"></span>
-                    <span id="live-clock">00:00:00 UTC</span>
-                </div>
-                <button class="cyber-btn cyber-btn-sm" id="btn-sound-toggle">
-                    <span id="sound-icon">🔊</span> AUDIO: ON
-                </button>
-                <a href="tel:+917505045948" class="cyber-btn cyber-btn-sm cyber-btn-pink">
-                    📞 7505045948
-                </a>
+    <!-- SCREEN 5: CIPHER UNLOCK (THE SECRET KEY) -->
+    <section id="screen-cipher" class="game-screen">
+      <div class="glass-card cipher-card">
+        <div class="badge-tag">TOP SECRET ENCRYPTION</div>
+        <h2>UNLOCK FARDEEN'S HEART VAULT 🔐</h2>
+        <p class="subtitle">Dil ki tijori ka 4-letter password enter karo (Hint: Dunya ki sabse pyari ladki ka naam):</p>
+
+        <div class="cipher-display">
+          <div class="cipher-slot" id="slot-0">_</div>
+          <div class="cipher-slot" id="slot-1">_</div>
+          <div class="cipher-slot" id="slot-2">_</div>
+          <div class="cipher-slot" id="slot-3">_</div>
+        </div>
+
+        <div class="keypad-grid" id="cipher-keypad">
+          <button class="key-btn" onclick="pressKey('Z')">Z</button>
+          <button class="key-btn" onclick="pressKey('A')">A</button>
+          <button class="key-btn" onclick="pressKey('O')">O</button>
+          <button class="key-btn" onclick="pressKey('Y')">Y</button>
+          <button class="key-btn" onclick="pressKey('R')">R</button>
+          <button class="key-btn" onclick="pressKey('K')">K</button>
+          <button class="key-btn clear-btn" onclick="clearKeys()">Clear ↺</button>
+        </div>
+
+        <div id="cipher-message" class="cipher-status">Sahi letters tap karo...</div>
+      </div>
+    </section>
+
+    <!-- SCREEN 6: THE GRAND PROPOSAL FINALE (THE KHAT) -->
+    <section id="screen-proposal" class="game-screen">
+      <!-- Floating Romantic Hearts/Confetti Canvas -->
+      <canvas id="fx-canvas"></canvas>
+
+      <div class="glass-card proposal-card" id="proposal-card">
+        <!-- Floating Cyber Envelope Seal (Before Opening) -->
+        <div id="envelope-sealed" class="envelope-sealed">
+          <div class="cyber-envelope-icon" onclick="openLoveLetter()">
+            <div class="envelope-glow"></div>
+            <div class="envelope-heart-stamp">💌</div>
+          </div>
+          <h2 class="neon-pink">CLASSIFIED MESSAGE DECRYPTED</h2>
+          <p class="pulse-sub">Tap the envelope to read Fardeen's Khat for Zoya ✨</p>
+          <button class="cyber-btn pink-btn" onclick="openLoveLetter()">OPEN KHAT 💖</button>
+        </div>
+
+        <!-- The Unfolded Glassmorphic Love Letter -->
+        <div id="letter-content" class="letter-content hidden">
+          <div class="letter-header">
+            <span class="cyber-seal">CYBER-ROMANCE ENCRYPTED // FOR ZOYA ONLY</span>
+            <div class="letter-date">From the Heart of Fardeen ❤️</div>
+          </div>
+
+          <div class="letter-body">
+            <h1 class="letter-greeting">Dearest Zoya,</h1>
+            <p class="letter-p">
+              Pata hai, is dunya ke hazaron algorithms, technical codes aur roz ke shor-sharabe ke beech... 
+              tum meri zindagi ka wo ek lauta sabse pyara hissa ho jo seedha mere dil me bina kisi condition ke fit baith gaya.
+            </p>
+            <p class="letter-p">
+              Tumhari wo cute si smile, tumhari choti-choti batien, tumhare wo mast wale nakhre aur jab tum has kar baat karti ho na—
+              sach batau toh mera pura din ban jata hai.
+            </p>
+            <p class="letter-p">
+              Mazaak apni jagah hai Zoya, par Fardeen ke dil ki har ek beat me sach me sirf tumhara hi naam rehta hai. 
+              Chahe dunya kitni bhi complex kyun na ho jaye, tumhare sath sab kuch bilkul simple aur khoobsurat lagta hai.
+            </p>
+            <p class="letter-p special-line">
+              "Chand taare toh sab laane ka wada karte hain, par mai hamesha tumhare chehre ki muskurahat ban kar sath rehna chahta hoon..." ✨
+            </p>
+            <div class="proposal-highlight">
+              <h2>I Love You, Zoya. ❤️</h2>
+              <p>Will you make Fardeen the happiest person and say YES? 💍🌸</p>
             </div>
-        </header>
+          </div>
 
-        <!-- Hero Section with Developer Profile -->
-        <section class="glass-panel hero-banner">
-            <div class="hero-info">
-                <div class="tagline">
-                    <span>⚡ NEXT-GEN AUTOMATION & WEB SUITE</span>
-                </div>
-                <h2>HIGH PERFORMANCE <br><span class="gradient-text">WORKFLOW ARCHITECTURE</span></h2>
-                <p class="lead">
-                    नमस्ते! मैं <strong>फरदीन (Fardeen)</strong> — फुल-स्टैक डेवलपर और ऑटोमेशन स्पेशलिस्ट। यह साइबरपंक ग्लासमॉर्फिज्म वर्कफ़्लो वेबसाइट आपके प्रोजेक्ट्स, ऑटोमेशन पाइपलाइन और रियल-टाइम टास्क मैनेजमेंट को सुपरफ़ास्ट और विजुअल बनाती है।
-                </p>
-
-                <div class="contact-quick-pill">
-                    <div>
-                        <span style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); display: block;">DIRECT HOTLINE</span>
-                        <span class="contact-phone-display">📱 +91 7505045948</span>
-                    </div>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <a href="tel:7505045948" class="cyber-btn cyber-btn-sm">
-                            <span>📞 CALL NOW</span>
-                        </a>
-                        <a href="https://wa.me/917505045948?text=Hi%20Fardeen,%20I%20checked%20your%20Cyberpunk%20Workflow%20website%20and%20want%20to%20discuss%20a%20project!" target="_blank" class="cyber-btn cyber-btn-sm cyber-btn-pink">
-                            <span>💬 WHATSAPP</span>
-                        </a>
-                        <button class="cyber-btn cyber-btn-sm" onclick="copyNumber()">
-                            <span>📋 COPY</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Verified Developer ID Badge -->
-            <div class="dev-badge-card">
-                <div class="dev-header">
-                    <div class="dev-avatar">
-                        <div class="dev-avatar-inner">F</div>
-                    </div>
-                    <div class="dev-title">
-                        <h3>FARDEEN</h3>
-                        <div class="role-sub">ID: #DEV-FDN-7505 // VERIFIED</div>
-                    </div>
-                </div>
-                <p style="font-size: 14px; color: var(--text-dim); line-height: 1.4;">
-                    Expert in Full-Stack Web Development, Workflow Automations, Cyber Glassmorphism UI/UX, and Custom Scripts.
-                </p>
-                <div class="dev-stats-grid">
-                    <div class="stat-box">
-                        <div class="val">99.8%</div>
-                        <div class="lbl">EFFICIENCY</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="val">48+</div>
-                        <div class="lbl">PROJECTS</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="val">&lt;10ms</div>
-                        <div class="lbl">LATENCY</div>
-                    </div>
-                </div>
-                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--neon-green); text-align: center; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
-                    ● AVAILABLE FOR FREELANCE & ENTERPRISE BUILDS
-                </div>
-            </div>
-        </section>
-
-        <!-- Interactive Workflow Pipeline Section -->
-        <section class="glass-panel pipeline-card">
-            <div class="section-title">
-                <div>
-                    <span>CYBER AUTOMATION <span class="accent">PIPELINE</span></span>
-                    <span style="font-size: 13px; font-family: var(--font-mono); color: var(--text-dim); margin-left: 10px;">[INTERACTIVE LIVE ENGINE]</span>
-                </div>
-                <button class="cyber-btn cyber-btn-sm" id="btn-run-pipeline">
-                    🚀 TRIGGER PIPELINE RUN
-                </button>
-            </div>
-
-            <div class="pipeline-track" id="pipeline-track">
-                <!-- Node 1 -->
-                <div class="pipe-node active-step" data-step="1">
-                    <div class="node-step-num">
-                        <span>STAGE 01</span>
-                        <span>[TRIGGER]</span>
-                    </div>
-                    <div class="node-title">Client Input</div>
-                    <div class="node-desc">Requirement capture, specs validation & auth check.</div>
-                    <div class="node-status-bar"><div class="node-status-fill" style="width: 100%;"></div></div>
-                </div>
-
-                <div class="pipe-connector"></div>
-
-                <!-- Node 2 -->
-                <div class="pipe-node" data-step="2">
-                    <div class="node-step-num">
-                        <span>STAGE 02</span>
-                        <span>[PROCESSING]</span>
-                    </div>
-                    <div class="node-title">AI Automation</div>
-                    <div class="node-desc">Synthesizing workflow rules, logic & script pipelines.</div>
-                    <div class="node-status-bar"><div class="node-status-fill"></div></div>
-                </div>
-
-                <div class="pipe-connector"></div>
-
-                <!-- Node 3 -->
-                <div class="pipe-node" data-step="3">
-                    <div class="node-step-num">
-                        <span>STAGE 03</span>
-                        <span>[ENGINEERING]</span>
-                    </div>
-                    <div class="node-title">Code Build</div>
-                    <div class="node-desc">Full-stack assembly, Cyberpunk UI & Glassmorphism styling.</div>
-                    <div class="node-status-bar"><div class="node-status-fill"></div></div>
-                </div>
-
-                <div class="pipe-connector"></div>
-
-                <!-- Node 4 -->
-                <div class="pipe-node" data-step="4">
-                    <div class="node-step-num">
-                        <span>STAGE 04</span>
-                        <span>[QA & TEST]</span>
-                    </div>
-                    <div class="node-title">Quality Audit</div>
-                    <div class="node-desc">Mobile responsiveness, cross-browser & performance check.</div>
-                    <div class="node-status-bar"><div class="node-status-fill"></div></div>
-                </div>
-
-                <div class="pipe-connector"></div>
-
-                <!-- Node 5 -->
-                <div class="pipe-node" data-step="5">
-                    <div class="node-step-num">
-                        <span>STAGE 05</span>
-                        <span>[DEPLOY]</span>
-                    </div>
-                    <div class="node-title">Live Production</div>
-                    <div class="node-desc">Instant cloud deployment & client handover by Fardeen.</div>
-                    <div class="node-status-bar"><div class="node-status-fill"></div></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Interactive Kanban Workflow Board -->
-        <div class="section-title">
-            <div>
-                <span>WORKFLOW SPRINTS // <span class="accent">KANBAN SYSTEM</span></span>
-            </div>
-            <button class="cyber-btn cyber-btn-sm" onclick="openNewTaskModal()">
-                ➕ ADD NEW WORKFLOW TASK
+          <!-- Proposal Decision Buttons -->
+          <div class="proposal-actions" id="proposal-buttons-area">
+            <button id="yes-btn" class="cyber-btn big-yes-btn" onclick="acceptProposal()">
+              <span class="btn-text">YES! 💖💍 (Fardeen Tum Jeet Gaye!)</span>
+              <span class="btn-glare"></span>
             </button>
+            <button id="no-btn" class="cyber-btn cheeky-no-btn">
+              <span class="btn-text" id="no-btn-text">Sochungi 😏</span>
+            </button>
+          </div>
         </div>
 
-        <div class="kanban-grid">
-            <!-- Col 1: Backlog -->
-            <div class="kanban-col" data-col="backlog">
-                <div class="col-header">
-                    <span class="col-title">📁 BACKLOG</span>
-                    <span class="col-count" id="count-backlog">0</span>
-                </div>
-                <div class="task-list" id="list-backlog"></div>
+        <!-- FINAL CELEBRATION MODAL -->
+        <div id="celebration-box" class="celebration-box hidden">
+          <div class="celebration-inner">
+            <div class="big-heart-badge">💍💖✨</div>
+            <h1 class="final-title">SHE SAID YES!</h1>
+            <h3 class="final-sub">FARDEEN + ZOYA = FOREVER LOCKED IN HEART 🔐❤️</h3>
+            <p class="final-caption">
+              Congratulations Zoya & Fardeen! Ye game yahi khatam nahi hota, ye toh tum dono ki khoobsurat kahani ki shuruaat hai! 🥂🎉
+            </p>
+            <div class="share-actions">
+              <button class="cyber-btn cyan-btn" onclick="shareWithFardeen()">
+                📲 Screenshot / WhatsApp Fardeen
+              </button>
+              <button class="cyber-btn purple-btn" onclick="restartGame()">
+                🔄 Play Again
+              </button>
             </div>
-
-            <!-- Col 2: In Progress -->
-            <div class="kanban-col" data-col="inprogress">
-                <div class="col-header">
-                    <span class="col-title" style="color: var(--neon-amber);">⚙️ IN PROGRESS</span>
-                    <span class="col-count" id="count-inprogress">0</span>
-                </div>
-                <div class="task-list" id="list-inprogress"></div>
-            </div>
-
-            <!-- Col 3: Review -->
-            <div class="kanban-col" data-col="review">
-                <div class="col-header">
-                    <span class="col-title" style="color: var(--neon-cyan);">🔍 CODE REVIEW</span>
-                    <span class="col-count" id="count-review">0</span>
-                </div>
-                <div class="task-list" id="list-review"></div>
-            </div>
-
-            <!-- Col 4: Deployed -->
-            <div class="kanban-col" data-col="completed">
-                <div class="col-header">
-                    <span class="col-title" style="color: var(--neon-green);">✅ DEPLOYED</span>
-                    <span class="col-count" id="count-completed">0</span>
-                </div>
-                <div class="task-list" id="list-completed"></div>
-            </div>
+          </div>
         </div>
 
-        <!-- Terminal & Services Dual Section -->
-        <div class="bottom-grid">
-            <!-- Cyber Terminal -->
-            <div class="glass-panel terminal-panel">
-                <div class="terminal-header">
-                    <div class="term-dots">
-                        <div class="term-dot dot-r"></div>
-                        <div class="term-dot dot-y"></div>
-                        <div class="term-dot dot-g"></div>
-                    </div>
-                    <span>TERMINAL // FARDEEN-WORKFLOW-CLI</span>
-                    <span>ONLINE</span>
-                </div>
-                <div class="terminal-screen" id="terminal-screen">
-                    <div>[SYSTEM_INIT] Booting Cyberpunk Glassmorphic Engine...</div>
-                    <div class="log-cyan">[AUTH] Developer verified: FARDEEN (Contact: 7505045948)</div>
-                    <div class="log-pink">[WORKFLOW] Loaded 4 active pipelines with zero latency.</div>
-                    <div>[SYS] Ready. Type 'help', 'status', 'contact', 'tasks' below.</div>
-                </div>
-                <div class="terminal-cmd-bar">
-                    <input type="text" class="terminal-input" id="terminal-input" placeholder="Enter command (e.g., help, status, fardeen)..." />
-                    <button class="cyber-btn cyber-btn-sm" id="btn-term-send">RUN</button>
-                </div>
-            </div>
+      </div>
+    </section>
 
-            <!-- Developer Services & Direct Contact -->
-            <div class="glass-panel services-panel">
-                <div class="section-title">
-                    <span>CONNECT WITH <span class="accent">FARDEEN</span></span>
-                </div>
-                <div class="service-tags">
-                    <span class="service-pill">⚡ Workflow Automation</span>
-                    <span class="service-pill">🌐 Full-Stack Apps</span>
-                    <span class="service-pill">💎 Glassmorphism UI</span>
-                    <span class="service-pill">🤖 Custom Bots</span>
-                    <span class="service-pill">📱 Mobile Responsive</span>
-                </div>
+  </main>
 
-                <form class="contact-form-glass" id="inquiry-form" onsubmit="handleInquiry(event)">
-                    <input type="text" class="glass-input" id="inq-name" placeholder="Your Name / Client Name" required />
-                    <input type="text" class="glass-input" id="inq-project" placeholder="Project or Workflow Need (e.g., Web App, Automation)" required />
-                    <textarea class="glass-textarea" id="inq-message" rows="3" placeholder="Brief requirement details..."></textarea>
-                    <button type="submit" class="cyber-btn cyber-btn-pink" style="justify-content: center; width: 100%;">
-                        🚀 SEND INQUIRY TO FARDEEN (WHATSAPP)
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <footer class="glass-panel hud-footer">
-            <div class="footer-credits">
-                DESIGNED & DEVELOPED BY <strong>FARDEEN</strong> // CYBERPUNK GLASSPHORISM WORKFLOW
-            </div>
-            <div class="footer-phone">
-                OFFICIAL MOBILE: <a href="tel:7505045948">+91 7505045948</a>
-            </div>
-            <div style="font-size: 11px; color: var(--neon-cyan);">
-                STATUS: ENCRYPTED & SECURED
-            </div>
-        </footer>
-
-    </div>
-
-    <!-- Add Task Modal -->
-    <div class="cyber-modal" id="task-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>➕ NEW WORKFLOW TASK</h3>
-                <button class="modal-close" onclick="closeNewTaskModal()">✕</button>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 14px;">
-                <div>
-                    <label style="font-family: var(--font-mono); font-size: 12px; color: var(--neon-cyan); display: block; margin-bottom: 6px;">TASK TITLE</label>
-                    <input type="text" class="glass-input" id="modal-task-title" placeholder="e.g., Build Glassmorphism Dashboard" />
-                </div>
-                <div>
-                    <label style="font-family: var(--font-mono); font-size: 12px; color: var(--neon-cyan); display: block; margin-bottom: 6px;">PRIORITY LEVEL</label>
-                    <select class="glass-input" id="modal-task-priority">
-                        <option value="high">High Priority (CRITICAL)</option>
-                        <option value="med" selected>Medium Priority</option>
-                        <option value="normal">Normal Routine</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="font-family: var(--font-mono); font-size: 12px; color: var(--neon-cyan); display: block; margin-bottom: 6px;">ASSIGNED COLUMN</label>
-                    <select class="glass-input" id="modal-task-col">
-                        <option value="backlog">Backlog</option>
-                        <option value="inprogress">In Progress</option>
-                        <option value="review">Code Review</option>
-                        <option value="completed">Deployed / Done</option>
-                    </select>
-                </div>
-                <button class="cyber-btn cyber-btn-pink" onclick="saveNewTask()" style="justify-content: center; margin-top: 10px;">
-                    CONFIRM & DISPATCH TASK
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Notification Toast -->
-    <div class="cyber-toast" id="toast-box">Notification message</div>
-
-    <!-- Cyberpunk Web Audio & Dynamic Script -->
-    <script>
-        /* =========================================================
-           1. CYBERPUNK SOUND SYNTHESIZER (ZERO EXTERNAL ASSETS)
-           ========================================================= */
-        let audioCtx = null;
-        let isAudioMuted = false;
-
-        function getAudioContext() {
-            if (!audioCtx) {
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                if (AudioContextClass) {
-                    audioCtx = new AudioContextClass();
-                }
-            }
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-            return audioCtx;
-        }
-
-        const SoundEngine = {
-            playBlip(freq = 880, duration = 0.08, type = 'sine') {
-                if (isAudioMuted) return;
-                try {
-                    const ctx = getAudioContext();
-                    if (!ctx) return;
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-
-                    osc.type = type;
-                    osc.frequency.setValueAtTime(freq, ctx.currentTime);
-                    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + duration);
-
-                    gain.gain.setValueAtTime(0.07, ctx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-
-                    osc.start();
-                    osc.stop(ctx.currentTime + duration);
-                } catch(e) {}
-            },
-
-            playLaser() {
-                if (isAudioMuted) return;
-                try {
-                    const ctx = getAudioContext();
-                    if (!ctx) return;
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-
-                    osc.type = 'sawtooth';
-                    osc.frequency.setValueAtTime(1200, ctx.currentTime);
-                    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.18);
-
-                    gain.gain.setValueAtTime(0.08, ctx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-
-                    osc.start();
-                    osc.stop(ctx.currentTime + 0.18);
-                } catch(e) {}
-            },
-
-            playSuccess() {
-                if (isAudioMuted) return;
-                try {
-                    const ctx = getAudioContext();
-                    if (!ctx) return;
-                    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
-                    notes.forEach((freq, idx) => {
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        const startTime = ctx.currentTime + (idx * 0.07);
-
-                        osc.type = 'triangle';
-                        osc.frequency.setValueAtTime(freq, startTime);
-
-                        gain.gain.setValueAtTime(0.08, startTime);
-                        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.25);
-
-                        osc.connect(gain);
-                        gain.connect(ctx.destination);
-
-                        osc.start(startTime);
-                        osc.stop(startTime + 0.25);
-                    });
-                } catch(e) {}
-            }
-        };
-
-        // Sound Toggle
-        const btnSoundToggle = document.getElementById('btn-sound-toggle');
-        btnSoundToggle.addEventListener('click', () => {
-            getAudioContext();
-            isAudioMuted = !isAudioMuted;
-            document.getElementById('sound-icon').textContent = isAudioMuted ? '🔇' : '🔊';
-            btnSoundToggle.innerHTML = `<span id="sound-icon">${isAudioMuted ? '🔇' : '🔊'}</span> AUDIO: ${isAudioMuted ? 'OFF' : 'ON'}`;
-            showToast(isAudioMuted ? 'Audio System Muted' : 'Audio System Engaged');
-            if (!isAudioMuted) SoundEngine.playBlip(980);
-        });
-
-        /* =========================================================
-           2. INTERACTIVE CYBER BACKGROUND PARTICLES & GRID
-           ========================================================= */
-        const canvas = document.getElementById('cyber-canvas');
-        const ctx = canvas.getContext('2d');
-        let width = canvas.width = window.innerWidth;
-        let height = canvas.height = window.innerHeight;
-
-        window.addEventListener('resize', () => {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
-        });
-
-        class CyberParticle {
-            constructor() {
-                this.reset();
-            }
-            reset() {
-                this.x = Math.random() * width;
-                this.y = Math.random() * height;
-                this.vx = (Math.random() - 0.5) * 0.8;
-                this.vy = (Math.random() - 0.5) * 0.8;
-                this.radius = Math.random() * 2 + 0.5;
-                this.alpha = Math.random() * 0.6 + 0.2;
-                this.color = Math.random() > 0.5 ? '#00f0ff' : '#ff0055';
-            }
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                if (this.x < 0 || this.x > width) this.vx *= -1;
-                if (this.y < 0 || this.y > height) this.vy *= -1;
-            }
-            draw() {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color;
-                ctx.globalAlpha = this.alpha;
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = 8;
-                ctx.fill();
-                ctx.restore();
-            }
-        }
-
-        const particles = Array.from({ length: 45 }, () => new CyberParticle());
-
-        function animateCanvas() {
-            ctx.clearRect(0, 0, width, height);
-
-            // Subtle Grid
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.03)';
-            ctx.lineWidth = 1;
-            const gridSize = 60;
-            for (let x = 0; x < width; x += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, height);
-                ctx.stroke();
-            }
-            for (let y = 0; y < height; y += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(width, y);
-                ctx.stroke();
-            }
-
-            // Particles & Node Connections
-            for (let i = 0; i < particles.length; i++) {
-                particles[i].update();
-                particles[i].draw();
-
-                for (let j = i + 1; j < particles.length; j++) {
-                    const dx = particles[i].x - particles[j].x;
-                    const dy = particles[i].y - particles[j].y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 110) {
-                        ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.strokeStyle = particles[i].color;
-                        ctx.globalAlpha = (1 - dist / 110) * 0.15;
-                        ctx.stroke();
-                    }
-                }
-            }
-
-            requestAnimationFrame(animateCanvas);
-        }
-        animateCanvas();
-
-        /* =========================================================
-           3. CLOCK & TOAST NOTIFICATION
-           ========================================================= */
-        function updateClock() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
-            document.getElementById('live-clock').textContent = `${timeStr} SYS`;
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
-
-        function showToast(msg) {
-            const toast = document.getElementById('toast-box');
-            toast.textContent = msg;
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3200);
-        }
-
-        function copyNumber() {
-            SoundEngine.playBlip(750);
-            navigator.clipboard.writeText('7505045948').then(() => {
-                showToast('📋 Mobile 7505045948 Copied to Clipboard!');
-            }).catch(() => {
-                showToast('📱 Fardeen Contact: 7505045948');
-            });
-        }
-
-        /* =========================================================
-           4. KANBAN WORKFLOW DATA & CONTROLS
-           ========================================================= */
-        let tasks = [
-            { id: 1, title: 'Architect Cyberpunk Glassmorphic UI Suite', priority: 'high', col: 'completed', time: '10:00' },
-            { id: 2, title: 'REST API & Webhook Automation Pipeline', priority: 'high', col: 'review', time: '11:30' },
-            { id: 3, title: 'Mobile Responsiveness & Touch Haptics Check', priority: 'med', col: 'inprogress', time: '12:45' },
-            { id: 4, title: 'WhatsApp Direct Bridge Integration for 7505045948', priority: 'normal', col: 'completed', time: '13:10' },
-            { id: 5, title: 'Database Indexing & Cloud Automation Script', priority: 'med', col: 'backlog', time: '14:20' }
-        ];
-
-        const COLUMNS = ['backlog', 'inprogress', 'review', 'completed'];
-
-        function renderKanban() {
-            COLUMNS.forEach(col => {
-                const listEl = document.getElementById(`list-${col}`);
-                const countEl = document.getElementById(`count-${col}`);
-                const colTasks = tasks.filter(t => t.col === col);
-
-                countEl.textContent = colTasks.length;
-                listEl.innerHTML = '';
-
-                if (colTasks.length === 0) {
-                    listEl.innerHTML = `<div style="text-align: center; color: var(--text-dim); font-size: 12px; font-family: var(--font-mono); padding: 24px 0;">[NO ACTIVE TASKS]</div>`;
-                    return;
-                }
-
-                colTasks.forEach(task => {
-                    const taskCard = document.createElement('div');
-                    taskCard.className = 'task-card';
-
-                    const priorityClass = task.priority === 'high' ? 'p-high' : task.priority === 'med' ? 'p-med' : 'p-normal';
-                    const priorityLabel = task.priority === 'high' ? 'CRITICAL' : task.priority === 'med' ? 'MEDIUM' : 'NORMAL';
-
-                    const currIdx = COLUMNS.indexOf(task.col);
-                    const canMoveLeft = currIdx > 0;
-                    const canMoveRight = currIdx < COLUMNS.length - 1;
-
-                    taskCard.innerHTML = `
-                        <span class="task-priority ${priorityClass}">${priorityLabel}</span>
-                        <div class="task-name">${task.title}</div>
-                        <div class="task-meta">
-                            <span>FARDEEN_SYS</span>
-                            <span>#ID-${task.id} • ${task.time}</span>
-                        </div>
-                        <div class="task-actions">
-                            ${canMoveLeft ? `<button class="task-move-btn" onclick="moveTask(${task.id}, -1)">◀ PREV</button>` : ''}
-                            ${canMoveRight ? `<button class="task-move-btn" onclick="moveTask(${task.id}, 1)">NEXT ▶</button>` : ''}
-                            <button class="task-move-btn" style="margin-left: auto; color: var(--neon-pink);" onclick="deleteTask(${task.id})">🗑 DEL</button>
-                        </div>
-                    `;
-                    listEl.appendChild(taskCard);
-                });
-            });
-        }
-
-        function moveTask(id, dir) {
-            const task = tasks.find(t => t.id === id);
-            if (!task) return;
-            const currIdx = COLUMNS.indexOf(task.col);
-            const nextIdx = currIdx + dir;
-            if (nextIdx >= 0 && nextIdx < COLUMNS.length) {
-                task.col = COLUMNS[nextIdx];
-                SoundEngine.playBlip(nextIdx === 3 ? 1200 : 700);
-                if (nextIdx === 3) SoundEngine.playSuccess();
-                renderKanban();
-                logToTerminal(`Task #${id} moved to [${COLUMNS[nextIdx].toUpperCase()}]`, 'log-cyan');
-                showToast(`Task moved to ${COLUMNS[nextIdx].toUpperCase()}`);
-            }
-        }
-
-        function deleteTask(id) {
-            tasks = tasks.filter(t => t.id !== id);
-            SoundEngine.playBlip(300, 0.12, 'sawtooth');
-            renderKanban();
-            logToTerminal(`Task #${id} deleted from workflow registry.`, 'log-pink');
-            showToast('Task removed');
-        }
-
-        function openNewTaskModal() {
-            SoundEngine.playBlip(600);
-            document.getElementById('task-modal').classList.add('open');
-        }
-
-        function closeNewTaskModal() {
-            document.getElementById('task-modal').classList.remove('open');
-        }
-
-        function saveNewTask() {
-            const titleInput = document.getElementById('modal-task-title');
-            const title = titleInput.value.trim();
-            if (!title) {
-                alert('Please enter a task title');
-                return;
-            }
-
-            const priority = document.getElementById('modal-task-priority').value;
-            const col = document.getElementById('modal-task-col').value;
-
-            const now = new Date();
-            const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            const newTask = {
-                id: Date.now() % 10000,
-                title,
-                priority,
-                col,
-                time
-            };
-
-            tasks.push(newTask);
-            titleInput.value = '';
-            closeNewTaskModal();
-            SoundEngine.playSuccess();
-            renderKanban();
-            logToTerminal(`New Task #${newTask.id} created: "${title}" in [${col.toUpperCase()}]`, 'log-cyan');
-            showToast('Task Dispatched to Workflow!');
-        }
-
-        renderKanban();
-
-        /* =========================================================
-           5. INTERACTIVE PIPELINE RUN ENGINE
-           ========================================================= */
-        const btnRunPipeline = document.getElementById('btn-run-pipeline');
-        let isPipelineRunning = false;
-
-        btnRunPipeline.addEventListener('click', () => {
-            if (isPipelineRunning) return;
-            isPipelineRunning = true;
-            btnRunPipeline.disabled = true;
-            btnRunPipeline.textContent = '⚡ RUNNING PIPELINE...';
-            SoundEngine.playLaser();
-
-            const nodes = document.querySelectorAll('.pipe-node');
-            nodes.forEach(n => {
-                n.classList.remove('active-step', 'success-step');
-                n.querySelector('.node-status-fill').style.width = '0%';
-            });
-
-            logToTerminal('[PIPELINE] Execution triggered by operator...', 'log-warn');
-
-            let currentStep = 0;
-            const interval = setInterval(() => {
-                if (currentStep < nodes.length) {
-                    const node = nodes[currentStep];
-                    node.classList.add('active-step');
-                    node.querySelector('.node-status-fill').style.width = '100%';
-                    SoundEngine.playBlip(650 + (currentStep * 120));
-                    logToTerminal(`[STAGE 0${currentStep + 1}] Processing: ${node.querySelector('.node-title').textContent}...`, 'log-cyan');
-                    
-                    if (currentStep > 0) {
-                        nodes[currentStep - 1].classList.remove('active-step');
-                        nodes[currentStep - 1].classList.add('success-step');
-                    }
-                    currentStep++;
-                } else {
-                    nodes[nodes.length - 1].classList.remove('active-step');
-                    nodes[nodes.length - 1].classList.add('success-step');
-                    clearInterval(interval);
-                    isPipelineRunning = false;
-                    btnRunPipeline.disabled = false;
-                    btnRunPipeline.textContent = '🚀 TRIGGER PIPELINE RUN';
-                    SoundEngine.playSuccess();
-                    logToTerminal('[PIPELINE] SUCCESS! All 5 stages deployed without flaws.', 'log-green');
-                    showToast('🎉 Workflow Pipeline Completed Successfully!');
-                }
-            }, 800);
-        });
-
-        /* =========================================================
-           6. LIVE CYBER TERMINAL CLI
-           ========================================================= */
-        const terminalScreen = document.getElementById('terminal-screen');
-        const terminalInput = document.getElementById('terminal-input');
-        const btnTermSend = document.getElementById('btn-term-send');
-
-        function logToTerminal(msg, cssClass = '') {
-            const div = document.createElement('div');
-            if (cssClass) div.className = cssClass;
-            div.textContent = `> ${msg}`;
-            terminalScreen.appendChild(div);
-            terminalScreen.scrollTop = terminalScreen.scrollHeight;
-        }
-
-        function executeCommand() {
-            const cmd = terminalInput.value.trim().toLowerCase();
-            if (!cmd) return;
-            logToTerminal(terminalInput.value, 'log-cyan');
-            SoundEngine.playBlip(800);
-            terminalInput.value = '';
-
-            switch(cmd) {
-                case 'help':
-                    logToTerminal('Available commands: status, fardeen, contact, tasks, pipeline, clear, ping');
-                    break;
-                case 'status':
-                    logToTerminal('[SYSTEM HEALTH] All nodes active. Memory: 98% nominal. Latency: 4ms.', 'log-green');
-                    break;
-                case 'fardeen':
-                case 'developer':
-                    logToTerminal('Lead Developer: FARDEEN. Mobile: +91 7505045948. Full-Stack Automation Architect.', 'log-pink');
-                    break;
-                case 'contact':
-                case 'call':
-                case 'phone':
-                    logToTerminal('Dialing / WhatsApp: +91 7505045948. One-tap call available at header.', 'log-warn');
-                    break;
-                case 'tasks':
-                    logToTerminal(`Active Tasks: ${tasks.length} total. In-Progress: ${tasks.filter(t => t.col === 'inprogress').length}`, 'log-cyan');
-                    break;
-                case 'pipeline':
-                    btnRunPipeline.click();
-                    break;
-                case 'ping':
-                    logToTerminal('PONG! 2ms to Fardeen Central Cloud Server.', 'log-green');
-                    break;
-                case 'clear':
-                    terminalScreen.innerHTML = '<div>[TERMINAL CLEARED]</div>';
-                    break;
-                default:
-                    logToTerminal(`Command '${cmd}' not recognized. Type 'help' for available commands.`, 'log-pink');
-            }
-        }
-
-        btnTermSend.addEventListener('click', executeCommand);
-        terminalInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') executeCommand();
-        });
-
-        /* =========================================================
-           7. WHATSAPP INQUIRY REDIRECT
-           ========================================================= */
-        function handleInquiry(e) {
-            e.preventDefault();
-            SoundEngine.playSuccess();
-            const name = document.getElementById('inq-name').value.trim();
-            const project = document.getElementById('inq-project').value.trim();
-            const msg = document.getElementById('inq-message').value.trim();
-
-            const text = `Hello Fardeen,\n\nMy Name: ${name}\nProject Need: ${project}\nDetails: ${msg || 'None provided'}\n\nI contacted you via your Cyberpunk Glassmorphism Workflow Website!`;
-            const encodedText = encodeURIComponent(text);
-            const waUrl = `https://wa.me/917505045948?text=${encodedText}`;
-
-            showToast('Redirecting to WhatsApp to chat with Fardeen...');
-            logToTerminal(`Inquiry dispatched to Fardeen (+91 7505045948)`, 'log-pink');
-
-            setTimeout(() => {
-                window.open(waUrl, '_blank');
-            }, 700);
-        }
-    </script>
+  <script src="game.js"></script>
 </body>
 </html>
