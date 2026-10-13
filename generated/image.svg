@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 932" width="430" height="932">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a0c10"/>
+      <stop offset="100%" stop-color="#12151c"/>
+    </linearGradient>
+
+    <!-- Card Gradient -->
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#191c24"/>
+      <stop offset="100%" stop-color="#13151b"/>
+    </linearGradient>
+
+    <!-- Instagram Gradient -->
+    <linearGradient id="instaGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f09433"/>
+      <stop offset="25%" stop-color="#e6683c"/>
+      <stop offset="50%" stop-color="#dc2743"/>
+      <stop offset="75%" stop-color="#cc2366"/>
+      <stop offset="100%" stop-color="#bc1888"/>
+    </linearGradient>
+
+    <!-- Subtle Shadows -->
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <style>
+    .font-heavy { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 800; }
+    .font-bold { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 700; }
+    .font-semi { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 600; }
+    .font-regular { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 400; }
+  </style>
+
+  <!-- Phone Screen Frame -->
+  <rect width="430" height="932" rx="48" fill="url(#bgGrad)"/>
+  <rect x="1.5" y="1.5" width="427" height="929" rx="46.5" fill="none" stroke="#2a2e39" stroke-width="3"/>
+
+  <!-- Dynamic Island / Punch Hole Notch -->
+  <rect x="152" y="14" width="126" height="34" rx="17" fill="#000000"/>
+  <circle cx="254" cy="31" r="5.5" fill="#141822"/>
+  <circle cx="254" cy="31" r="2.5" fill="#082b3d"/>
+
+  <!-- Status Bar (Time, 5G, Wi-Fi, Low Battery) -->
+  <text x="44" y="38" fill="#ffffff" class="font-semi" font-size="15" letter-spacing="0.2">23:58</text>
+  
+  <g transform="translate(332, 25)">
+    <!-- Cellular 5G -->
+    <rect x="0" y="8" width="3" height="4" rx="0.8" fill="#ffffff"/>
+    <rect x="4.5" y="6" width="3" height="6" rx="0.8" fill="#ffffff"/>
+    <rect x="9" y="3.5" width="3" height="8.5" rx="0.8" fill="#ffffff"/>
+    <rect x="13.5" y="1" width="3" height="11" rx="0.8" fill="#ffffff"/>
+    
+    <!-- WiFi Icon -->
+    <path d="M 23 12 A 4 4 0 0 1 27 12 M 21 9.5 A 7 7 0 0 1 29 9.5 M 19 7 A 10 10 0 0 1 31 7" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+    <circle cx="25" cy="12.5" r="1" fill="#ffffff"/>
+
+    <!-- Battery (Critical 4% Red) -->
+    <rect x="36" y="2" width="22" height="11" rx="3.5" fill="none" stroke="#ffffff" stroke-width="1.4"/>
+    <path d="M 59 5.5 C 59.8 5.5 60.5 6 60.5 7.5 C 60.5 9 59.8 9.5 59 9.5" fill="#ffffff"/>
+    <rect x="38" y="4" width="4" height="7" rx="1.5" fill="#ff453a"/>
+  </g>
+
+  <!-- Top Navigation Bar -->
+  <g transform="translate(24, 76)">
+    <circle cx="16" cy="16" r="18" fill="#191c24"/>
+    <path d="M 19 9 L 12 16 L 19 23" fill="none" stroke="#e1e4ea" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <text x="50" y="14" fill="#ffffff" class="font-bold" font-size="19">App Management</text>
+    <text x="50" y="31" fill="#8e95a5" class="font-regular" font-size="12">Digital Wellbeing &amp; Screen Time</text>
+
+    <!-- More menu dots -->
+    <circle cx="366" cy="16" r="18" fill="#191c24"/>
+    <circle cx="360" cy="16" r="2" fill="#ffffff"/>
+    <circle cx="366" cy="16" r="2" fill="#ffffff"/>
+    <circle cx="372" cy="16" r="2" fill="#ffffff"/>
+  </g>
+
+  <!-- HERO CARD: Total Screen Time (23h 35m) -->
+  <g transform="translate(20, 134)" filter="url(#cardShadow)">
+    <rect width="390" height="236" rx="28" fill="url(#cardGrad)"/>
+    <rect width="390" height="236" rx="28" fill="none" stroke="#252a36" stroke-width="1.2"/>
+
+    <text x="24" y="34" fill="#9da4b4" class="font-semi" font-size="13" letter-spacing="0.5">SCREEN TIME TODAY</text>
+    <rect x="274" y="18" width="92" height="24" rx="12" fill="#2b181b"/>
+    <text x="320" y="34" fill="#ff453a" class="font-bold" font-size="11" text-anchor="middle">🚨 CRITICAL</text>
+
+    <!-- Big Screen Time Display -->
+    <text x="24" y="86" fill="#ffffff" class="font-heavy" font-size="44" letter-spacing="-0.5">23<tspan font-size="28" fill="#9da4b4" class="font-semi">h </tspan>35<tspan font-size="28" fill="#9da4b4" class="font-semi">m</tspan></text>
+    
+    <!-- Subtitle Badge / Info -->
+    <g transform="translate(24, 102)">
+      <rect x="0" y="0" width="220" height="24" rx="6" fill="#202532"/>
+      <path d="M 8 16 L 13 8 L 18 16" fill="none" stroke="#ff453a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="24" y="16" fill="#ff6b6b" class="font-bold" font-size="11.5">+1,410m vs daily limit</text>
+      <text x="232" y="16" fill="#8e95a5" class="font-regular" font-size="11.5">98.3% of 24h day</text>
+    </g>
+
+    <!-- Multi-segmented Progress Bar -->
+    <g transform="translate(24, 142)">
+      <rect x="0" y="0" width="342" height="14" rx="7" fill="#1c202a"/>
+      <!-- Instagram: 700m (49.5%) -->
+      <rect x="0" y="0" width="168" height="14" rx="7" fill="url(#instaGrad)"/>
+      <rect x="160" y="0" width="8" height="14" fill="#cc2366"/>
+      <!-- YouTube: 435m (30.7%) -->
+      <rect x="171" y="0" width="103" height="14" fill="#FF0000"/>
+      <!-- TikTok: 275m (19.4%) -->
+      <rect x="276" y="0" width="62" height="14" fill="#25F4EE"/>
+      <!-- Chrome: 5m (0.4%) -->
+      <rect x="339" y="0" width="3" height="14" rx="1.5" fill="#FBBC05"/>
+    </g>
+
+    <!-- Legend -->
+    <g transform="translate(24, 180)">
+      <circle cx="5" cy="5" r="4.5" fill="#dc2743"/>
+      <text x="14" y="9" fill="#d0d5e2" class="font-semi" font-size="11">Insta 49%</text>
+
+      <circle cx="95" cy="5" r="4.5" fill="#FF0000"/>
+      <text x="104" y="9" fill="#d0d5e2" class="font-semi" font-size="11">YouTube 31%</text>
+
+      <circle cx="198" cy="5" r="4.5" fill="#25F4EE"/>
+      <text x="207" y="9" fill="#d0d5e2" class="font-semi" font-size="11">TikTok 19%</text>
+
+      <circle cx="290" cy="5" r="4.5" fill="#FBBC05"/>
+      <text x="299" y="9" fill="#8e95a5" class="font-semi" font-size="11">Chrome &lt;1%</text>
+    </g>
+
+    <line x1="24" y1="202" x2="366" y2="202" stroke="#232733" stroke-width="1"/>
+    <text x="24" y="222" fill="#7d8597" class="font-regular" font-size="11.5">Unlocked 189 times  •  542 Notifications received</text>
+  </g>
+
+  <!-- SECTION TITLE -->
+  <g transform="translate(24, 400)">
+    <text x="0" y="0" fill="#ffffff" class="font-bold" font-size="17">Most Used Apps</text>
+    <text x="382" y="0" fill="#3888ff" class="font-semi" font-size="13" text-anchor="end">Show all</text>
+  </g>
+
+  <!-- APP LIST -->
+  <g transform="translate(20, 418)">
+
+    <!-- 1. INSTAGRAM (11h 40m) -->
+    <g transform="translate(0, 0)">
+      <rect width="390" height="92" rx="20" fill="url(#cardGrad)" stroke="#232733" stroke-width="1"/>
+      <g transform="translate(16, 18)">
+        <rect width="56" height="56" rx="14" fill="url(#instaGrad)"/>
+        <rect x="14" y="14" width="28" height="28" rx="8" fill="none" stroke="#ffffff" stroke-width="2.6"/>
+        <circle cx="28" cy="28" r="6.8" fill="none" stroke="#ffffff" stroke-width="2.6"/>
+        <circle cx="34.8" cy="20.8" r="2" fill="#ffffff"/>
+      </g>
+      <text x="86" y="38" fill="#ffffff" class="font-bold" font-size="16">Instagram</text>
+      <text x="86" y="55" fill="#8a92a2" class="font-regular" font-size="12">Social • Reels &amp; Stories</text>
+      <text x="372" y="38" fill="#ffffff" class="font-heavy" font-size="17" text-anchor="end">11h 40m</text>
+      <text x="372" y="54" fill="#e6683c" class="font-semi" font-size="11.5" text-anchor="end">#1 Most Used</text>
+      <rect x="86" y="66" width="286" height="5" rx="2.5" fill="#20242f"/>
+      <rect x="86" y="66" width="286" height="5" rx="2.5" fill="url(#instaGrad)"/>
+    </g>
+
+    <!-- 2. YOUTUBE (7h 15m) -->
+    <g transform="translate(0, 102)">
+      <rect width="390" height="92" rx="20" fill="url(#cardGrad)" stroke="#232733" stroke-width="1"/>
+      <g transform="translate(16, 18)">
+        <rect width="56" height="56" rx="14" fill="#212121"/>
+        <rect x="8" y="14" width="40" height="28" rx="8" fill="#FF0000"/>
+        <polygon points="25,22 25,34 35,28" fill="#ffffff"/>
+      </g>
+      <text x="86" y="38" fill="#ffffff" class="font-bold" font-size="16">YouTube</text>
+      <text x="86" y="55" fill="#8a92a2" class="font-regular" font-size="12">Video • Shorts &amp; Feeds</text>
+      <text x="372" y="38" fill="#ffffff" class="font-heavy" font-size="17" text-anchor="end">7h 15m</text>
+      <text x="372" y="54" fill="#ff4d4d" class="font-semi" font-size="11.5" text-anchor="end">30.7% of total</text>
+      <rect x="86" y="66" width="286" height="5" rx="2.5" fill="#20242f"/>
+      <rect x="86" y="66" width="177" height="5" rx="2.5" fill="#FF0000"/>
+    </g>
+
+    <!-- 3. TIKTOK (4h 35m) -->
+    <g transform="translate(0, 204)">
+      <rect width="390" height="92" rx="20" fill="url(#cardGrad)" stroke="#232733" stroke-width="1"/>
+      <g transform="translate(16, 18)">
+        <rect width="56" height="56" rx="14" fill="#010101"/>
+        <g transform="translate(15, 12)">
+          <path d="M19 4 C17 1 15 0 15 0 L11 0 L11 17 C10 16 8 15 6 16 C3 17 2 20 3 23 C4 26 8 27 11 25 C13 23 14 21 14 19 L14 8 C17 10 19 11 23 11 L23 7 C20 7 19 5 19 4 Z" fill="#25F4EE" opacity="0.9"/>
+          <path d="M21 5 C19 2 17 1 17 1 L13 1 L13 18 C12 17 10 16 8 17 C5 18 4 21 5 24 C6 27 10 28 13 26 C15 24 16 22 16 20 L16 9 C19 11 21 12 25 12 L25 8 C22 8 21 6 21 5 Z" fill="#FE2C55" opacity="0.9"/>
+          <path d="M20 4.5 C18 1.5 16 0.5 16 0.5 L12 0.5 L12 17.5 C11 16.5 9 15.5 7 16.5 C4 17.5 3 20.5 4 23.5 C5 26.5 9 27.5 12 25.5 C14 23.5 15 21.5 15 19.5 L15 8.5 C18 10.5 20 11.5 24 11.5 L24 7.5 C21 7.5 20 5.5 20 4.5 Z" fill="#ffffff"/>
+        </g>
+      </g>
+      <text x="86" y="38" fill="#ffffff" class="font-bold" font-size="16">TikTok</text>
+      <text x="86" y="55" fill="#8a92a2" class="font-regular" font-size="12">Short Entertainment</text>
+      <text x="372" y="38" fill="#ffffff" class="font-heavy" font-size="17" text-anchor="end">4h 35m</text>
+      <text x="372" y="54" fill="#25F4EE" class="font-semi" font-size="11.5" text-anchor="end">19.4% of total</text>
+      <rect x="86" y="66" width="286" height="5" rx="2.5" fill="#20242f"/>
+      <rect x="86" y="66" width="112" height="5" rx="2.5" fill="#25F4EE"/>
+    </g>
+
+    <!-- 4. GOOGLE CHROME (5m) -->
+    <g transform="translate(0, 306)">
+      <rect width="390" height="92" rx="20" fill="url(#cardGrad)" stroke="#232733" stroke-width="1"/>
+      <g transform="translate(16, 18)">
+        <rect width="56" height="56" rx="14" fill="#1b1e26"/>
+        <g transform="translate(28, 28)">
+          <circle cx="0" cy="0" r="18" fill="#EA4335"/>
+          <path d="M 0 0 L 15.6 -9 A 18 18 0 0 1 9 15.6 Z" fill="#34A853"/>
+          <path d="M 0 0 L 9 15.6 A 18 18 0 0 1 -18 0 Z" fill="#FBBC05"/>
+          <path d="M 0 0 L -18 0 A 18 18 0 0 1 15.6 -9 Z" fill="#EA4335"/>
+          <circle cx="0" cy="0" r="9.5" fill="#ffffff"/>
+          <circle cx="0" cy="0" r="7.5" fill="#4285F4"/>
+        </g>
+      </g>
+      <text x="86" y="38" fill="#ffffff" class="font-bold" font-size="16">Google Chrome</text>
+      <text x="86" y="55" fill="#8a92a2" class="font-regular" font-size="12">Browser • Quick Search</text>
+      <text x="372" y="38" fill="#ffffff" class="font-heavy" font-size="17" text-anchor="end">5m</text>
+      <text x="372" y="54" fill="#34A853" class="font-semi" font-size="11.5" text-anchor="end">0.4% (Healthy)</text>
+      <rect x="86" y="66" width="286" height="5" rx="2.5" fill="#20242f"/>
+      <rect x="86" y="66" width="6" height="5" rx="2.5" fill="#4285F4"/>
+    </g>
+  </g>
+
+  <!-- DAILY LIMIT NOTICE CARD -->
+  <g transform="translate(20, 834)">
+    <rect width="390" height="48" rx="16" fill="#171922" stroke="#252a38" stroke-width="1"/>
+    <circle cx="28" cy="24" r="8" fill="#ff453a" opacity="0.2"/>
+    <text x="28" y="28" fill="#ff453a" class="font-bold" font-size="11" text-anchor="middle">!</text>
+    <text x="46" y="28" fill="#a4abbb" class="font-semi" font-size="12.5">Daily goal was 2 hrs • Exceeded by 21h 35m</text>
+  </g>
+
+  <!-- Bottom Android/iOS Gesture Bar -->
+  <rect x="145" y="914" width="140" height="5" rx="2.5" fill="#ffffff" opacity="0.75"/>
+</svg>

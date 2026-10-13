@@ -210,6 +210,57 @@ fun SettingsScreen(
                     )
                 }
 
+                SectionLabel("Message Font Size & Text Scaling")
+                Text(
+                    "Adjust chat message text size for optimal reading comfort:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val fontSizes = listOf(
+                        "small" to "Small\n(0.85x)",
+                        "medium" to "Medium\n(1.0x)",
+                        "large" to "Large\n(1.18x)",
+                        "huge" to "Huge\n(1.35x)"
+                    )
+                    for ((key, label) in fontSizes) {
+                        val sel = settings.fontSize == key
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { omni.settings.update { it.copy(fontSize = key) } }
+                                .border(
+                                    width = if (sel) 2.dp else 1.dp,
+                                    color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(12.dp)
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (sel) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                else MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
                 SectionLabel("App Theme & Color Palette")
                 Text(
                     "Choose your favorite color style (12 custom themes):",

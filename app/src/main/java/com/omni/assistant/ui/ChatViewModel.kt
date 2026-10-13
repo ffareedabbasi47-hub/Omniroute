@@ -299,24 +299,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             dao.touch(targetCid, now)
 
             val lower = text.lowercase().trim()
+            val hasImageKeyword = Regex("""\b(photo|ohoto|image|picture|tasveer|pic|pics|wallpaper|drawing|painting|screenshot|portrait|illustration)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lower)
+            val hasActionKeyword = Regex("""\b(banao|bana|banaye|banado|create|creat|generate|generat|make|draw|dikhao|chahiye|de|do|show|get|want)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lower)
+            val isExplicitImagePrefix = lower.startsWith("photo") || lower.startsWith("ohoto") || lower.startsWith("image") || lower.startsWith("pic") ||
+                lower.contains("ki photo") || lower.contains("ka photo") || lower.contains("ki image") || lower.contains("ka image")
+
             val isImageGen = attached.isEmpty() && (mode == ChatMode.IMAGE || (mode == ChatMode.CHAT && (
-                lower.startsWith("photo banao") || lower.startsWith("image banao") ||
-                lower.startsWith("picture banao") || lower.startsWith("tasveer banao") ||
-                lower.startsWith("pic banao") || lower.startsWith("create image") ||
-                lower.startsWith("generate image") || lower.startsWith("create photo") ||
-                lower.startsWith("creat photo") || lower.startsWith("draw photo") ||
-                lower.startsWith("draw image") || lower.contains("ki photo banao") ||
-                lower.contains("ki image banao") || lower.contains("ka photo banao") ||
-                lower.contains("ka image banao")
+                isExplicitImagePrefix || (hasImageKeyword && hasActionKeyword) ||
+                (hasImageKeyword && !lower.contains("code") && !lower.contains("class ") && !lower.contains("function"))
             )))
 
+            val hasVideoKeyword = Regex("""\b(video|vdeo|vedeo|clip|animation)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lower)
+            val isExplicitVideoPrefix = lower.startsWith("video") || lower.startsWith("vdeo") || lower.startsWith("vedeo") ||
+                lower.contains("ki video") || lower.contains("ka video") || lower.contains("ki vdeo") || lower.contains("ki vedeo")
+
             val isVideoGen = attached.isEmpty() && (mode == ChatMode.VIDEO || (mode == ChatMode.CHAT && (
-                lower.startsWith("video banao") || lower.startsWith("vdeo banao") ||
-                lower.startsWith("vedeo banao") || lower.startsWith("create video") ||
-                lower.startsWith("creat video") || lower.startsWith("generate video") ||
-                lower.startsWith("make video") || lower.contains("ki video banao") ||
-                lower.contains("ka video banao") || lower.contains("ki vdeo banao") ||
-                lower.contains("ki vedeo banao")
+                isExplicitVideoPrefix || (hasVideoKeyword && hasActionKeyword)
             )))
 
             when {
@@ -505,9 +503,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             val (_, cleanFinal) = FileExport.splitThinking(rawFinal)
             val finalText = cleanFinal.ifBlank { rawFinal }
             val now = System.currentTimeMillis()
-            dao.insertMessage(MessageEntity(conversationId = cid, role = "assistant", content = finalText, createdAt = now))
+            val mid = dao.insertMessage(MessageEntity(conversationId = cid, role = "assistant", content = finalText, createdAt = now))
             dao.touch(cid, now)
             omni.connection.markOk()
+            postProcessReply(cid, mid, finalText)
             if (omni.settings.current.speakReplies) speak(finalText)
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
@@ -530,6 +529,50 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         } finally {
             runningJobs.remove(cid)
             activeTasks.update { it - cid }
+        }
+    }
+
+    private suspend fun postProcessReply(cid: Long, mid: Long, text: String) {
+        val hasSvg = text.contains("<svg", ignoreCase = true) || text.contains("image.svg", ignoreCase = true)
+        val lastUserMsg = dao.getMessages(cid).lastOrNull { it.role == "user" }?.content.orEmpty()
+        val userAskedImage = Regex("""\b(photo|ohoto|image|picture|tasveer|pic|screenshot|wallpaper)\b""", RegexOption.IGNORE_CASE).containsMatchIn(lastUserMsg)
+
+        if (hasSvg || (userAskedImage && !text.contains("http://") && !text.contains("file://"))) {
+            val cleaned = text.replace(Regex("""```(xml|svg|html)?:?image\.svg?[\s\S]*?```""", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("""<svg[\s\S]*?</svg>""", RegexOption.IGNORE_CASE), "")
+                .trim()
+            val prompt = lastUserMsg.ifBlank { "creative visual art" }
+            try {
+                val items = omni.client.requestImages(prompt)
+                if (items.isNotEmpty()) {
+                    val item = items[0]
+                    val tmp = store.newGeneratedFile("bin")
+                    val type = omni.client.saveItem(item, tmp, 40L * 1024 * 1024)
+                    if (type != null) {
+                        val dest = java.io.File(tmp.parentFile, tmp.nameWithoutExtension + "." + type.ext)
+                        if (tmp.renameTo(dest)) {
+                            val draft = store.registerGenerated(dest, "image", "generated_photo.${type.ext}", type.mime)
+                            dao.insertAttachments(listOf(
+                                AttachmentEntity(
+                                    messageId = mid, kind = draft.kind, name = draft.name, mime = draft.mime,
+                                    path = draft.path, thumbPath = draft.thumbPath, sizeBytes = draft.sizeBytes
+                                )
+                            ))
+                        } else {
+                            tmp.delete()
+                        }
+                    } else {
+                        tmp.delete()
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            val displayNotice = if (cleaned.isNotEmpty()) {
+                "$cleaned\n\n🖼️ **Photo Generated & Ready:**"
+            } else {
+                "🖼️ **Photo Generated & Ready:**"
+            }
+            dao.updateMessageContent(mid, displayNotice)
         }
     }
 

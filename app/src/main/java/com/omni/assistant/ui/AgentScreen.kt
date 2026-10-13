@@ -215,6 +215,25 @@ private fun SetupSection(ui: AgentUi, vm: AgentViewModel) {
         enabled = !ui.busy && ui.connectionOk == true && ui.workspace.isNotBlank() && ui.prompt.isNotBlank(),
         modifier = Modifier.fillMaxWidth()
     )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedButton(
+            onClick = vm::pushToGit,
+            enabled = !ui.busy && ui.connectionOk == true,
+            modifier = Modifier.weight(1f).height(46.dp)
+        ) {
+            Text("🚀 Push to GitHub")
+        }
+        OutlinedButton(
+            onClick = vm::reloadDiff,
+            enabled = !ui.busy && ui.connectionOk == true,
+            modifier = Modifier.weight(1f).height(46.dp)
+        ) {
+            Text("🔍 Check Diff")
+        }
+    }
 }
 
 @Composable
@@ -246,7 +265,24 @@ private fun ReviewSection(ui: AgentUi, vm: AgentViewModel) {
         DiffView(diff)
         if (ui.diffTruncated) Text("Diff truncated for size. Review the rest on the bridge machine.", style = MaterialTheme.typography.bodySmall)
     }
-    OutlinedButton(onClick = vm::reloadDiff, enabled = !ui.busy) { Text("Refresh diff") }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        GradientButton(
+            "🚀 Push to GitHub",
+            onClick = vm::pushToGit,
+            enabled = !ui.busy,
+            modifier = Modifier.weight(1f)
+        )
+        OutlinedButton(
+            onClick = vm::reloadDiff,
+            enabled = !ui.busy,
+            modifier = Modifier.weight(1f).height(46.dp)
+        ) {
+            Text("Refresh diff")
+        }
+    }
 
     HorizontalDivider()
     Text("Verify (each command needs your approval)", style = MaterialTheme.typography.titleSmall)

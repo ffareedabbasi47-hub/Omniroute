@@ -26,6 +26,7 @@ class OmniExtras(
 )
 
 val LocalOmni = staticCompositionLocalOf<OmniExtras> { error("OmniTheme not provided") }
+val LocalFontSizeScale = staticCompositionLocalOf { 1.0f }
 
 data class ThemePreset(
     val id: String,
@@ -441,12 +442,23 @@ private fun resolveColors(mode: String, systemDark: Boolean): Pair<ColorScheme, 
     }
 }
 
+fun fontSizeToScale(size: String): Float = when (size.lowercase()) {
+    "small" -> 0.85f
+    "large" -> 1.18f
+    "huge" -> 1.35f
+    else -> 1.0f
+}
+
 @Composable
-fun OmniTheme(mode: String, content: @Composable () -> Unit) {
+fun OmniTheme(mode: String, fontSize: String = "medium", content: @Composable () -> Unit) {
     val systemDark = isSystemInDarkTheme()
     val (scheme, extras) = resolveColors(mode, systemDark)
+    val scale = fontSizeToScale(fontSize)
 
-    CompositionLocalProvider(LocalOmni provides extras) {
+    CompositionLocalProvider(
+        LocalOmni provides extras,
+        LocalFontSizeScale provides scale
+    ) {
         MaterialTheme(colorScheme = scheme, content = content)
     }
 }

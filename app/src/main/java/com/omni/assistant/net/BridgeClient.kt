@@ -145,4 +145,9 @@ class BridgeClient(private val settings: SettingsStore) {
         val o = call("GET", "/diff?workspace=$name")
         return BridgeDiff(o.optString("diff"), o.optString("status"), o.optBoolean("truncated", false))
     }
+
+    suspend fun gitPush(workspace: String): JSONObject {
+        val name = java.net.URLEncoder.encode(workspace, "UTF-8")
+        return call("POST", "/git/push?workspace=$name")
+    }
 }

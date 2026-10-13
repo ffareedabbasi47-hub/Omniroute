@@ -249,6 +249,32 @@ class AgentViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun pushToGit() {
+        val st = _ui.value
+        val ws = st.workspace.ifBlank { "OmniAssistant" }
+        _ui.update { it.copy(busy = true, busyLabel = "Pushing changes to GitHub repository…", error = null) }
+        viewModelScope.launch {
+            try {
+                append(BridgeLine("info", "$ git push origin main (triggered from Omni Assistant)"))
+                val res = bridge.gitPush(ws)
+                val ok = res.optBoolean("ok", false)
+                val commit = res.optString("commit", "")
+                val push = res.optString("push", "")
+                if (commit.isNotBlank()) append(BridgeLine("info", commit))
+                if (push.isNotBlank()) append(BridgeLine("info", push))
+                if (ok) {
+                    append(BridgeLine("info", "✅ Successfully pushed to GitHub repository!"))
+                } else {
+                    val err = res.optString("error", "Push failed")
+                    append(BridgeLine("error", "❌ Git push error: $err"))
+                }
+                _ui.update { it.copy(busy = false) }
+            } catch (e: Exception) {
+                _ui.update { it.copy(busy = false, error = friendly(e)) }
+            }
+        }
+    }
+
     // ---- Polling --------------------------------------------------------------------------------
 
     private fun append(line: BridgeLine) {

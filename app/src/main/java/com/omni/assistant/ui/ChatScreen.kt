@@ -177,7 +177,7 @@ fun ChatScreen(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         vm.addAttachments(uris)
     }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+    val onCameraResult = { ok: Boolean ->
         val savedUriStr = cameraUriString
         val u = if (savedUriStr != null) Uri.parse(savedUriStr) else omni.attachments.lastCameraUri
         val targetFile = omni.attachments.lastCameraFile
@@ -186,6 +186,46 @@ fun ChatScreen(
             vm.addAttachments(listOf(u))
         }
         cameraUriString = null
+    }
+
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        onCameraResult(ok)
+    }
+
+    val fallbackCamera = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val targetFile = omni.attachments.lastCameraFile
+        val hasBytes = targetFile?.exists() == true && targetFile.length() > 0
+        onCameraResult(res.resultCode == android.app.Activity.RESULT_OK || hasBytes)
+    }
+
+    fun doLaunchCamera() {
+        val uri = omni.attachments.newCameraUri()
+        cameraUriString = uri.toString()
+        try {
+            camera.launch(uri)
+        } catch (_: Exception) {
+            try {
+                val captureIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                    putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                    clipData = ClipData.newRawUri("camera_capture", uri)
+                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                fallbackCamera.launch(Intent.createChooser(captureIntent, "Take Photo"))
+            } catch (_: Exception) {
+                try {
+                    val stillIntent = Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+                    ctx.startActivity(stillIntent)
+                } catch (_: Exception) {
+                    vm.notify("No camera app is available on this device.")
+                }
+            }
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        doLaunchCamera()
     }
 
     fun launchPhotos() {
@@ -205,12 +245,13 @@ fun ChatScreen(
     }
 
     fun launchCamera() {
-        try {
-            val uri = omni.attachments.newCameraUri()
-            cameraUriString = uri.toString()
-            camera.launch(uri)
-        } catch (e: Exception) {
-            vm.notify("No camera app is available on this device.")
+        val hasPermission = ContextCompat.checkSelfPermission(
+            ctx, Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            doLaunchCamera()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -335,6 +376,16 @@ fun ChatScreen(
                     title = title,
                     model = settings.model,
                     conn = conn,
+                    fontSize = settings.fontSize,
+                    onToggleFontSize = {
+                        val next = when (settings.fontSize) {
+                            "small" -> "medium"
+                            "medium" -> "large"
+                            "large" -> "huge"
+                            else -> "small"
+                        }
+                        omni.settings.update { it.copy(fontSize = next) }
+                    },
                     menuOpen = menuOpen,
                     onMenuOpen = { menuOpen = it },
                     onHistory = onHistory,
@@ -475,6 +526,8 @@ private fun ChatTopBar(
     title: String,
     model: String,
     conn: ConnState,
+    fontSize: String,
+    onToggleFontSize: () -> Unit,
     menuOpen: Boolean,
     onMenuOpen: (Boolean) -> Unit,
     onHistory: () -> Unit,
@@ -509,6 +562,13 @@ private fun ChatTopBar(
                 Icon(Icons.Default.MoreVert, contentDescription = "More options")
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { onMenuOpen(false) }) {
+                DropdownMenuItem(
+                    text = { Text("Text size: ${fontSize.replaceFirstChar { it.uppercase() }}") },
+                    leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                    onClick = {
+                        onToggleFontSize()
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Voice conversation") },
                     leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null) },
@@ -1035,15 +1095,23 @@ private fun MessageBubble(
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (attachments.isNotEmpty()) MessageAttachments(attachments, onOpenAttachment)
             if (m.content.isNotBlank()) {
+                val fontScale = LocalFontSizeScale.current
                 Box(
                     Modifier
-                        .widthIn(max = 300.dp)
+                        .widthIn(max = (310 * fontScale).dp)
                         .clip(RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp))
                         .background(ex.userBubble)
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .padding(horizontal = (14 * fontScale).dp, vertical = (10 * fontScale).dp)
                 ) {
                     SelectionContainer {
-                        Text(m.content, style = MaterialTheme.typography.bodyLarge, color = ex.onUserBubble)
+                        Text(
+                            m.content,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = (15.5f * fontScale).sp,
+                                lineHeight = (22f * fontScale).sp
+                            ),
+                            color = ex.onUserBubble
+                        )
                     }
                 }
             }

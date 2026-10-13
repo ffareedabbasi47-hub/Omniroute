@@ -20,12 +20,25 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun MarkdownView(content: String) {
     val clean = com.omni.assistant.data.FileExport.splitThinking(content).cleanText
+    val fontScale = LocalFontSizeScale.current
     SelectionContainer {
         Text(
             text = parseMarkdown(clean),
-            style = MaterialTheme.typography.bodyLarge
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = (15.5f * fontScale).sp,
+                lineHeight = (22.5f * fontScale).sp
+            )
         )
     }
+}
+
+@Composable
+fun MarkdownView(
+    text: String,
+    onSaveCode: ((String, String) -> Unit)? = null,
+    onRunHtml: ((String) -> Unit)? = null
+) {
+    MarkdownView(content = text)
 }
 
 private fun parseMarkdown(text: String): AnnotatedString {

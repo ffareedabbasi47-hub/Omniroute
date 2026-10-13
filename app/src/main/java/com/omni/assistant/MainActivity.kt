@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
         omni.connection.check()
         setContent {
             val settings by omni.settings.flow.collectAsStateWithLifecycle()
-            OmniTheme(settings.theme) {
+            OmniTheme(settings.theme, settings.fontSize) {
                 Surface { AppRoot() }
             }
         }

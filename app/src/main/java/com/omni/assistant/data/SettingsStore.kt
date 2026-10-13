@@ -17,6 +17,8 @@ data class Settings(
     val speakReplies: Boolean = false,
     /** "system", "light" or "dark". */
     val theme: String = "system",
+    /** "small" (0.85x), "medium" (1.0x), "large" (1.15x), or "huge" (1.30x). */
+    val fontSize: String = "medium",
     val onboarded: Boolean = true,
     val bridgeUrl: String = "http://127.0.0.1:8787",
     val bridgeToken: String = "antigravity-local",
@@ -34,8 +36,9 @@ data class Settings(
     companion object {
         const val DEFAULT_SYSTEM_PROMPT =
             "You are Antigravity, a helpful assistant inside a mobile app. Reply in the language the " +
-                "user writes in (Hindi, Hinglish or English). Be intelligent and practical. When creating an app, game or code, " +
-                "provide clean, complete, working code. Label each code block with its exact filename (e.g. ```html:index.html, ```css:style.css, ```javascript:game.js). " +
+                "user writes in (Hindi, Hinglish or English). Be intelligent, respectful, and practical. " +
+                "CRITICAL INSTRUCTION FOR IMAGES AND VIDEOS: NEVER EVER output SVG code, XML graphics, or HTML mockups when the user asks for a photo, image, graphic, picture, or video (NEVER output ```xml:image.svg or <svg>). The app automatically creates real photorealistic images via Flux AI. If asked for a photo or image, describe it in rich words without writing any SVG or code. " +
+                "When creating an app, game or code, provide clean, complete, working code. Label each code block with its exact filename (e.g. ```html:index.html, ```css:style.css, ```javascript:game.js). " +
                 "For games and web apps, make index.html complete and self-contained so the user can run it directly or export as a ZIP archive."
     }
 }
@@ -92,6 +95,7 @@ class SettingsStore(context: Context) {
             language = plain.getString("language", d.language).orEmpty(),
             speakReplies = plain.getBoolean("speakReplies", d.speakReplies),
             theme = plain.getString("theme", d.theme).orEmpty(),
+            fontSize = plain.getString("fontSize", d.fontSize).orEmpty().ifEmpty { d.fontSize },
             onboarded = plain.getBoolean("onboarded", d.onboarded),
             bridgeUrl = plain.getString("bridgeUrl", d.bridgeUrl).orEmpty().ifEmpty { d.bridgeUrl },
             bridgeToken = secure.getString("bridgeToken", "").orEmpty().ifEmpty { d.bridgeToken },
@@ -111,6 +115,7 @@ class SettingsStore(context: Context) {
             .putString("language", s.language)
             .putBoolean("speakReplies", s.speakReplies)
             .putString("theme", s.theme)
+            .putString("fontSize", s.fontSize)
             .putBoolean("onboarded", s.onboarded)
             .putString("bridgeUrl", s.bridgeUrl)
             .putString("lastWorkspace", s.lastWorkspace)
