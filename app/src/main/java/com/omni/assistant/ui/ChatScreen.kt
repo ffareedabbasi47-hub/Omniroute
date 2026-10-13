@@ -847,8 +847,12 @@ private fun MessageBubble(
     val ex = LocalOmni.current
     val clipboard = LocalClipboardManager.current
     var exportMenu by remember { mutableStateOf(false) }
-    val codeFiles = remember(m.content) { FileExport.extractCodeFiles(m.content) }
-    val playableHtml = remember(codeFiles) { FileExport.findPlayableHtml(codeFiles) }
+    val codeFiles = remember(m.content) {
+        try { FileExport.extractCodeFiles(m.content) } catch (_: Exception) { emptyList() }
+    }
+    val playableHtml = remember(codeFiles) {
+        try { FileExport.findPlayableHtml(codeFiles) } catch (_: Exception) { null }
+    }
 
     if (m.role == "user") {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {

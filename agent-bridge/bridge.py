@@ -250,20 +250,24 @@ class Bridge:
         )
         full_prompt = system_hint + prompt
 
-        candidates = [
-            [bin_to_use, "-p", full_prompt, "--dangerously-skip-permissions"],
-            [bin_to_use, "-p", full_prompt],
-        ]
+        bins = [bin_to_use]
         full_home_agy = os.path.expanduser("~/.local/bin/agy")
-        if os.path.isfile(full_home_agy) and full_home_agy != bin_to_use:
-            candidates.append([full_home_agy, "-p", full_prompt, "--dangerously-skip-permissions"])
-            candidates.append([full_home_agy, "-p", full_prompt])
+        if os.path.isfile(full_home_agy) and full_home_agy not in bins:
+            bins.append(full_home_agy)
+
+        candidates = []
+        for b in bins:
+            candidates.append(([b, "-p", full_prompt], None))
+            candidates.append(([b, full_prompt], None))
+            candidates.append(([b], full_prompt))
+            candidates.append(([b, "-p", full_prompt, "--dangerously-skip-permissions"], None))
 
         last_err = ""
-        for cmd in candidates:
+        for cmd, stdin_data in candidates:
             try:
                 p = subprocess.run(
                     cmd,
+                    input=stdin_data,
                     capture_output=True,
                     text=True,
                     timeout=600,

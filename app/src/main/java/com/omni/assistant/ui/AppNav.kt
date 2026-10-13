@@ -32,10 +32,6 @@ fun AppRoot() {
             )
         }
         composable("chat") {
-            val act = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
-            androidx.activity.compose.BackHandler {
-                act?.moveTaskToBack(true)
-            }
             ChatScreen(
                 vm = chatVm,
                 onHistory = { nav.navigate("history") },

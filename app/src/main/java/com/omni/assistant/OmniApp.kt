@@ -98,6 +98,17 @@ class OmniApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val file = java.io.File(filesDir, "last_crash.txt")
+                val sw = java.io.StringWriter()
+                throwable.printStackTrace(java.io.PrintWriter(sw))
+                file.writeText("Time: ${System.currentTimeMillis()}\nThread: ${thread.name}\n$sw")
+            } catch (_: Throwable) {
+            }
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
         try {
             val field = android.database.CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
             field.isAccessible = true

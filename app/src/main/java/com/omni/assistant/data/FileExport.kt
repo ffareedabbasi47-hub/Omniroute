@@ -199,24 +199,31 @@ object FileExport {
 
     /** Combines index.html with any companion CSS/JS into a single runnable HTML file for instant play. */
     fun findPlayableHtml(files: List<CodeFile>): String? {
-        val htmlFile = files.firstOrNull { it.name.endsWith(".html", ignoreCase = true) } ?: return null
-        var html = htmlFile.content
-        val cssFile = files.firstOrNull { it.name.endsWith(".css", ignoreCase = true) }
-        val jsFile = files.firstOrNull { it.name.endsWith(".js", ignoreCase = true) }
-        if (cssFile != null && !html.contains(cssFile.content.take(30))) {
-            html = if (html.contains("</head>", ignoreCase = true)) {
-                html.replace(Regex("(?i)</head>"), "<style>\n${cssFile.content}\n</style>\n</head>")
-            } else {
-                "<style>\n${cssFile.content}\n</style>\n" + html
+        return try {
+            val htmlFile = files.firstOrNull { it.name.endsWith(".html", ignoreCase = true) } ?: return null
+            var html = htmlFile.content
+            val cssFile = files.firstOrNull { it.name.endsWith(".css", ignoreCase = true) }
+            val jsFile = files.firstOrNull { it.name.endsWith(".js", ignoreCase = true) }
+
+            if (cssFile != null && cssFile.content.isNotBlank() && !html.contains(cssFile.content.take(30))) {
+                val headIdx = html.indexOf("</head>", ignoreCase = true)
+                html = if (headIdx != -1) {
+                    html.substring(0, headIdx) + "<style>\n" + cssFile.content + "\n</style>\n" + html.substring(headIdx)
+                } else {
+                    "<style>\n" + cssFile.content + "\n</style>\n" + html
+                }
             }
-        }
-        if (jsFile != null && !html.contains(jsFile.content.take(30))) {
-            html = if (html.contains("</body>", ignoreCase = true)) {
-                html.replace(Regex("(?i)</body>"), "<script>\n${jsFile.content}\n</script>\n</body>")
-            } else {
-                html + "\n<script>\n${jsFile.content}\n</script>"
+            if (jsFile != null && jsFile.content.isNotBlank() && !html.contains(jsFile.content.take(30))) {
+                val bodyIdx = html.indexOf("</body>", ignoreCase = true)
+                html = if (bodyIdx != -1) {
+                    html.substring(0, bodyIdx) + "<script>\n" + jsFile.content + "\n</script>\n" + html.substring(bodyIdx)
+                } else {
+                    html + "\n<script>\n" + jsFile.content + "\n</script>"
+                }
             }
+            html
+        } catch (_: Exception) {
+            files.firstOrNull { it.name.endsWith(".html", ignoreCase = true) }?.content
         }
-        return html
     }
 }

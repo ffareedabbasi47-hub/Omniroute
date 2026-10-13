@@ -3,414 +3,449 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>My Talking Tom 2 - Billi Wala Game</title>
+  <title>Talking Tom Cat 2 - Web Edition</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="game-app">
-    <!-- TOP STATUS BAR -->
-    <header class="top-bar">
-      <div class="stat-pill" title="Khushi (Fun)">
-        <span class="stat-icon">😄</span>
-        <div class="stat-bar-container">
-          <div class="stat-bar" id="bar-fun" style="width: 85%;"></div>
+
+  <!-- Main Game Frame -->
+  <div id="game-container">
+
+    <!-- Top Heads-Up Display (Stats & Coins) -->
+    <header id="top-hud">
+      <div class="hud-row">
+        <div class="user-badge">
+          <span>🐱 Tom</span>
+          <span class="level-badge" id="user-level">Lv. 1</span>
+        </div>
+        <div class="currency-badge">
+          <span class="coin-icon">🪙</span>
+          <span id="user-coins">150</span>
         </div>
       </div>
-      <div class="stat-pill" title="Bhookh (Hunger)">
-        <span class="stat-icon">🍔</span>
-        <div class="stat-bar-container">
-          <div class="stat-bar" id="bar-hunger" style="width: 70%;"></div>
+
+      <!-- Tamagotchi Status Bars -->
+      <div class="hud-stats">
+        <div class="stat-card" title="Bhookh (Hunger)">
+          <span class="stat-icon">🍽️</span>
+          <div class="stat-bar-outer">
+            <div class="stat-bar-inner bar-hunger" id="val-hunger" style="width: 80%;"></div>
+          </div>
         </div>
-      </div>
-      <div class="stat-pill" title="Safai (Hygiene)">
-        <span class="stat-icon">🛁</span>
-        <div class="stat-bar-container">
-          <div class="stat-bar" id="bar-hygiene" style="width: 80%;"></div>
+        <div class="stat-card" title="Safai (Hygiene)">
+          <span class="stat-icon">🛁</span>
+          <div class="stat-bar-outer">
+            <div class="stat-bar-inner bar-hygiene" id="val-hygiene" style="width: 75%;"></div>
+          </div>
         </div>
-      </div>
-      <div class="stat-pill" title="Neend (Energy)">
-        <span class="stat-icon">⚡</span>
-        <div class="stat-bar-container">
-          <div class="stat-bar" id="bar-energy" style="width: 90%;"></div>
+        <div class="stat-card" title="Urja (Energy)">
+          <span class="stat-icon">⚡</span>
+          <div class="stat-bar-outer">
+            <div class="stat-bar-inner bar-energy" id="val-energy" style="width: 90%;"></div>
+          </div>
         </div>
-      </div>
-      <div class="coin-pill">
-        <span class="coin-icon">🪙</span>
-        <span id="coin-count">150</span>
+        <div class="stat-card" title="Khushi (Happiness)">
+          <span class="stat-icon">❤️</span>
+          <div class="stat-bar-outer">
+            <div class="stat-bar-inner bar-happy" id="val-happy" style="width: 85%;"></div>
+          </div>
+        </div>
       </div>
     </header>
 
-    <!-- MAIN SCENE CONTAINER -->
-    <main id="scene-viewport" class="room-living">
-      <!-- Dark overlay for Bedroom / Lights off -->
-      <div id="night-overlay" class="night-overlay hidden">
-        <div class="moon">🌙</div>
-        <div class="star s1">⭐</div>
-        <div class="star s2">✨</div>
-        <div class="star s3">⭐</div>
-      </div>
+    <!-- Speech Bubble for Tom's Voice & Reactions -->
+    <div id="speech-bubble">Namaste dost! Mai hu Tom! 😸❤️</div>
 
-      <!-- Floating interaction FX layer -->
-      <div id="fx-layer"></div>
+    <!-- Floating Particles Container (Hearts, Stars, Bubbles, Zzz) -->
+    <div id="fx-container" class="fx-container"></div>
 
-      <!-- SPEECH BUBBLE -->
-      <div id="speech-bubble" class="speech-bubble hidden">
-        <span id="speech-text">Meow! Kaise ho dost?</span>
-      </div>
+    <!-- Multi-Room Scenes -->
+    <main id="room-view">
 
-      <!-- TOM CHARACTER STAGE -->
-      <div id="tom-stage">
-        <!-- SVG Interactive Tom -->
-        <svg id="tom-svg" viewBox="0 0 400 520" xmlns="http://www.w3.org/2000/svg">
+      <!-- Room 1: Living Room (Baithak) -->
+      <section id="bg-living" class="room-bg bg-living active">
+        <div class="window-sun"></div>
+        <!-- Punching Bag Prop -->
+        <div id="punching-bag" class="room-prop punching-bag" title="Tom ke sath punch practice karo!">
+          <div class="punching-bag-chain"></div>
+        </div>
+        <!-- Playful Ball Prop -->
+        <div id="ball-prop" class="room-prop ball-prop" title="Ball tap karo!"></div>
+      </section>
+
+      <!-- Room 2: Kitchen (Rasoi) -->
+      <section id="bg-kitchen" class="room-bg bg-kitchen">
+        <div class="kitchen-shelf"></div>
+      </section>
+
+      <!-- Room 3: Bathroom (Ghusalkhana) -->
+      <section id="bg-bathroom" class="room-bg bg-bathroom">
+        <div class="bath-tiles"></div>
+      </section>
+
+      <!-- Room 4: Bedroom (Kamra) -->
+      <section id="bg-bedroom" class="room-bg bg-bedroom">
+        <div class="night-moon"></div>
+        <div id="bed-lamp" class="bed-lamp" title="Light On/Off karo!">
+          <div class="lamp-shade"></div>
+          <div class="lamp-pole"></div>
+          <div class="lamp-base"></div>
+        </div>
+        <div id="bedroom-dark-overlay" class="bedroom-dark-overlay"></div>
+      </section>
+
+    </main>
+
+    <!-- Interactive Talking Tom Cat SVG Character Stage -->
+    <div id="character-stage">
+      <div class="cat-svg-container">
+
+        <!-- Touch Hotspots -->
+        <div class="touch-zone zone-head" title="Sir sahlao ya tap karo!"></div>
+        <div class="touch-zone zone-belly" title="Pet pe gudgudi karo!"></div>
+        <div class="touch-zone zone-left-foot" title="Pair tap karo!"></div>
+        <div class="touch-zone zone-right-foot" title="Pair tap karo!"></div>
+        <div class="touch-zone zone-tail" title="Poonch mat kheecho!"></div>
+
+        <!-- High Quality Vector SVG Tom -->
+        <svg id="tom-svg" class="breathing" viewBox="0 0 320 420" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <radialGradient id="tomFur" cx="50%" cy="40%" r="60%">
-              <stop offset="0%" stop-color="#9ea7ad"/>
-              <stop offset="70%" stop-color="#737c82"/>
-              <stop offset="100%" stop-color="#555c61"/>
+            <radialGradient id="grad-fur" cx="50%" cy="40%" r="60%">
+              <stop offset="0%" stop-color="var(--fur-light, #b4c2cc)"/>
+              <stop offset="70%" stop-color="var(--fur-color, #8c9ba5)"/>
+              <stop offset="100%" stop-color="var(--fur-shadow, #6c7982)"/>
             </radialGradient>
-            <radialGradient id="tomBelly" cx="50%" cy="45%" r="55%">
-              <stop offset="0%" stop-color="#fdf9f3"/>
-              <stop offset="85%" stop-color="#e3ded5"/>
-              <stop offset="100%" stop-color="#cfc9be"/>
+            <radialGradient id="grad-belly" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="100%" stop-color="var(--fur-belly, #e2e8f0)"/>
             </radialGradient>
-            <linearGradient id="innerEar" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#ff99bb"/>
-              <stop offset="100%" stop-color="#e66890"/>
-            </linearGradient>
-            <radialGradient id="eyeGreen" cx="35%" cy="35%" r="60%">
-              <stop offset="0%" stop-color="#76ff03"/>
-              <stop offset="60%" stop-color="#43a047"/>
-              <stop offset="100%" stop-color="#1b5e20"/>
+            <radialGradient id="grad-eye" cx="35%" cy="35%" r="65%">
+              <stop offset="0%" stop-color="#34d399"/>
+              <stop offset="60%" stop-color="#10b981"/>
+              <stop offset="100%" stop-color="#047857"/>
             </radialGradient>
-            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-              <feDropShadow dx="0" dy="8" stdDeviation="6" flood-opacity="0.25"/>
-            </filter>
           </defs>
 
-          <!-- Floor Shadow -->
-          <ellipse cx="200" cy="495" rx="120" ry="20" fill="rgba(0,0,0,0.22)"/>
-
           <!-- Tail -->
-          <g id="tom-tail" class="animated-tail">
-            <path d="M 120 420 Q 50 430 40 370 Q 30 310 65 290 Q 75 305 55 350 Q 70 395 135 410 Z" fill="url(#tomFur)"/>
-            <path d="M 40 370 Q 30 310 65 290 Q 75 305 55 350 Z" fill="#ffffff" opacity="0.6"/>
-          </g>
+          <path id="cat-tail" class="tail-wag" d="M 230 330 Q 285 300 275 240 Q 265 210 280 200 Q 295 215 285 255 Q 265 330 220 350 Z" fill="url(#grad-fur)"/>
+
+          <!-- Body -->
+          <ellipse cx="160" cy="290" rx="72" ry="90" fill="url(#grad-fur)"/>
+          <!-- Belly Patch -->
+          <ellipse cx="160" cy="305" rx="46" ry="62" fill="url(#grad-belly)"/>
 
           <!-- Feet & Paws -->
-          <g id="tom-feet">
-            <g id="foot-left" class="clickable-body-part" data-part="foot">
-              <ellipse cx="140" cy="475" rx="35" ry="22" fill="url(#tomFur)" filter="url(#shadow)"/>
-              <ellipse cx="140" cy="472" rx="20" ry="12" fill="#fff" opacity="0.8"/>
-              <ellipse cx="140" cy="473" rx="10" ry="7" fill="#ff80ab"/>
-              <circle cx="127" cy="466" r="3.5" fill="#ff80ab"/>
-              <circle cx="140" cy="462" r="3.5" fill="#ff80ab"/>
-              <circle cx="153" cy="466" r="3.5" fill="#ff80ab"/>
-            </g>
-            <g id="foot-right" class="clickable-body-part" data-part="foot">
-              <ellipse cx="260" cy="475" rx="35" ry="22" fill="url(#tomFur)" filter="url(#shadow)"/>
-              <ellipse cx="260" cy="472" rx="20" ry="12" fill="#fff" opacity="0.8"/>
-              <ellipse cx="260" cy="473" rx="10" ry="7" fill="#ff80ab"/>
-              <circle cx="247" cy="466" r="3.5" fill="#ff80ab"/>
-              <circle cx="260" cy="462" r="3.5" fill="#ff80ab"/>
-              <circle cx="273" cy="466" r="3.5" fill="#ff80ab"/>
-            </g>
-          </g>
+          <ellipse cx="115" cy="385" rx="26" ry="16" fill="url(#grad-fur)"/>
+          <ellipse cx="205" cy="385" rx="26" ry="16" fill="url(#grad-fur)"/>
+          <!-- Toe Pads -->
+          <circle cx="105" cy="385" r="4" fill="#cbd5e1"/>
+          <circle cx="115" cy="388" r="4" fill="#cbd5e1"/>
+          <circle cx="125" cy="385" r="4" fill="#cbd5e1"/>
+          <circle cx="195" cy="385" r="4" fill="#cbd5e1"/>
+          <circle cx="205" cy="388" r="4" fill="#cbd5e1"/>
+          <circle cx="215" cy="385" r="4" fill="#cbd5e1"/>
 
-          <!-- Body / Torso -->
-          <g id="tom-torso" class="clickable-body-part" data-part="belly">
-            <ellipse cx="200" cy="355" rx="90" ry="110" fill="url(#tomFur)" filter="url(#shadow)"/>
-            <ellipse id="tom-belly-patch" cx="200" cy="365" rx="65" ry="85" fill="url(#tomBelly)"/>
-            <circle cx="200" cy="405" r="3" fill="#b0a89d" opacity="0.7"/>
-          </g>
+          <!-- Arms -->
+          <path d="M 95 250 C 70 280 75 320 95 335 C 105 320 105 270 105 255 Z" fill="url(#grad-fur)"/>
+          <path d="M 225 250 C 250 280 245 320 225 335 C 215 320 215 270 215 255 Z" fill="url(#grad-fur)"/>
 
-          <!-- Dirt Smudges (Hygiene low) -->
-          <g id="dirt-spots" class="hidden">
-            <ellipse cx="170" cy="340" rx="14" ry="9" fill="#5c4033" opacity="0.65" transform="rotate(-15 170 340)"/>
-            <ellipse cx="230" cy="380" rx="18" ry="11" fill="#5c4033" opacity="0.6" transform="rotate(20 230 380)"/>
-            <circle cx="195" cy="315" r="8" fill="#5c4033" opacity="0.55"/>
-            <circle cx="140" cy="200" r="7" fill="#5c4033" opacity="0.5"/>
-          </g>
-
-          <!-- Soap Bubbles Overlay -->
-          <g id="soap-layer"></g>
-
-          <!-- Clothes: Bowtie -->
-          <g id="acc-bowtie" class="acc-item hidden">
-            <polygon points="175,260 175,280 195,270" fill="#e91e63"/>
-            <polygon points="225,260 225,280 205,270" fill="#e91e63"/>
-            <circle cx="200" cy="270" r="7" fill="#c2185b"/>
-          </g>
-
-          <!-- Arms & Hands -->
-          <g id="arm-left" class="clickable-body-part" data-part="arm">
-            <path d="M 125 300 C 90 330 80 385 105 405 C 120 415 135 385 130 350 Z" fill="url(#tomFur)"/>
-            <circle cx="106" cy="398" r="16" fill="url(#tomBelly)"/>
-          </g>
-          <g id="arm-right" class="clickable-body-part" data-part="arm">
-            <path d="M 275 300 C 310 330 320 385 295 405 C 280 415 265 385 270 350 Z" fill="url(#tomFur)"/>
-            <circle cx="294" cy="398" r="16" fill="url(#tomBelly)"/>
+          <!-- Accessory: Bowtie -->
+          <g id="acc-bowtie" style="display: none;">
+            <polygon points="135,240 160,248 135,256" fill="#ef4444"/>
+            <polygon points="185,240 160,248 185,256" fill="#ef4444"/>
+            <circle cx="160" cy="248" r="5" fill="#b91c1c"/>
           </g>
 
           <!-- Head Group -->
-          <g id="tom-head-group">
+          <g id="cat-head">
             <!-- Ears -->
-            <g id="ear-left" class="clickable-body-part" data-part="ear">
-              <polygon points="100,165 70,50 155,105" fill="url(#tomFur)" filter="url(#shadow)"/>
-              <polygon points="98,150 82,75 142,112" fill="url(#innerEar)"/>
-              <path d="M 100 145 Q 115 135 125 150" stroke="#fff" stroke-width="4" fill="none" opacity="0.8"/>
-            </g>
-            <g id="ear-right" class="clickable-body-part" data-part="ear">
-              <polygon points="300,165 330,50 245,105" fill="url(#tomFur)" filter="url(#shadow)"/>
-              <polygon points="302,150 318,75 258,112" fill="url(#innerEar)"/>
-              <path d="M 300 145 Q 285 135 275 150" stroke="#fff" stroke-width="4" fill="none" opacity="0.8"/>
-            </g>
+            <polygon points="100,140 70,60 130,95" fill="url(#grad-fur)"/>
+            <polygon points="98,135 78,75 122,100" fill="#fca5a5"/>
+
+            <polygon points="220,140 250,60 190,95" fill="url(#grad-fur)"/>
+            <polygon points="222,135 242,75 198,100" fill="#fca5a5"/>
 
             <!-- Head Base -->
-            <ellipse id="tom-head-base" cx="200" cy="180" rx="105" ry="92" fill="url(#tomFur)" filter="url(#shadow)" class="clickable-body-part" data-part="head"/>
+            <ellipse cx="160" cy="160" rx="76" ry="68" fill="url(#grad-fur)"/>
+            <!-- Cheeks / Muzzle -->
+            <ellipse cx="138" cy="190" rx="26" ry="20" fill="url(#grad-belly)"/>
+            <ellipse cx="182" cy="190" rx="26" ry="20" fill="url(#grad-belly)"/>
 
-            <!-- Muzzle / Chubby Cheeks -->
-            <path d="M 130 205 C 130 245 170 255 200 240 C 230 255 270 245 270 205 C 270 175 240 170 200 178 C 160 170 130 175 130 205 Z" fill="url(#tomBelly)"/>
+            <!-- Whiskers Left -->
+            <line x1="125" y1="188" x2="65" y2="182" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="125" y1="193" x2="60" y2="195" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="125" y1="198" x2="68" y2="208" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
 
-            <!-- Whiskers -->
-            <g id="whiskers" stroke="#444" stroke-width="2.5" stroke-linecap="round" opacity="0.8">
-              <line x1="140" y1="210" x2="80" y2="195"/>
-              <line x1="140" y1="218" x2="70" y2="218"/>
-              <line x1="140" y1="226" x2="85" y2="238"/>
-              <line x1="260" y1="210" x2="320" y2="195"/>
-              <line x1="260" y1="218" x2="330" y2="218"/>
-              <line x1="260" y1="226" x2="315" y2="238"/>
+            <!-- Whiskers Right -->
+            <line x1="195" y1="188" x2="255" y2="182" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="195" y1="193" x2="260" y2="195" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="195" y1="198" x2="252" y2="208" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
+
+            <!-- Eyes Sclera -->
+            <ellipse cx="126" cy="148" rx="20" ry="24" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+            <ellipse cx="194" cy="148" rx="20" ry="24" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+
+            <!-- Eye Irises -->
+            <ellipse id="eye-left-iris" cx="126" cy="148" rx="14" ry="17" fill="url(#grad-eye)"/>
+            <ellipse id="eye-right-iris" cx="194" cy="148" rx="14" ry="17" fill="url(#grad-eye)"/>
+
+            <!-- Eye Pupils (Tracking Pointer) -->
+            <g id="eye-left-pupil">
+              <ellipse cx="126" cy="148" rx="8" ry="13" fill="#0f172a"/>
+              <circle cx="122" cy="142" r="3.5" fill="#ffffff"/>
+              <circle cx="128" cy="153" r="1.8" fill="#ffffff"/>
+            </g>
+            <g id="eye-right-pupil">
+              <ellipse cx="194" cy="148" rx="8" ry="13" fill="#0f172a"/>
+              <circle cx="190" cy="142" r="3.5" fill="#ffffff"/>
+              <circle cx="196" cy="153" r="1.8" fill="#ffffff"/>
             </g>
 
-            <!-- Nose -->
-            <path id="tom-nose" d="M 190 195 Q 200 190 210 195 Q 200 210 190 195 Z" fill="#ff6b8b" class="clickable-body-part" data-part="nose"/>
-
-            <!-- Eyes -->
-            <g id="tom-eyes" class="clickable-body-part" data-part="eyes">
-              <!-- Left Eye -->
-              <g id="eye-left-group">
-                <ellipse cx="155" cy="150" rx="26" ry="32" fill="#ffffff" stroke="#4a5257" stroke-width="3"/>
-                <ellipse id="iris-left" cx="158" cy="150" rx="18" ry="24" fill="url(#eyeGreen)"/>
-                <ellipse id="pupil-left" cx="159" cy="150" rx="8" ry="17" fill="#111111"/>
-                <circle cx="153" cy="142" r="6" fill="#ffffff"/>
-                <circle cx="163" cy="158" r="2.5" fill="#ffffff"/>
-                <path id="eyelid-left" d="M 129 150 Q 155 150 181 150" stroke="#737c82" stroke-width="0" fill="#737c82"/>
-              </g>
-
-              <!-- Right Eye -->
-              <g id="eye-right-group">
-                <ellipse cx="245" cy="150" rx="26" ry="32" fill="#ffffff" stroke="#4a5257" stroke-width="3"/>
-                <ellipse id="iris-right" cx="242" cy="150" rx="18" ry="24" fill="url(#eyeGreen)"/>
-                <ellipse id="pupil-right" cx="241" cy="150" rx="8" ry="17" fill="#111111"/>
-                <circle cx="237" cy="142" r="6" fill="#ffffff"/>
-                <circle cx="247" cy="158" r="2.5" fill="#ffffff"/>
-                <path id="eyelid-right" d="M 219 150 Q 245 150 271 150" stroke="#737c82" stroke-width="0" fill="#737c82"/>
-              </g>
-            </g>
+            <!-- Eyelids (Blink & Sleep) -->
+            <path class="cat-eyelid" d="M 106 148 Q 126 172 146 148 Q 126 124 106 148 Z" fill="url(#grad-fur)" stroke="#475569" stroke-width="2" style="display: none;"/>
+            <path class="cat-eyelid" d="M 174 148 Q 194 172 214 148 Q 194 124 174 148 Z" fill="url(#grad-fur)" stroke="#475569" stroke-width="2" style="display: none;"/>
 
             <!-- Eyebrows -->
-            <g id="eyebrows" stroke="#4a5257" stroke-width="4.5" stroke-linecap="round" fill="none">
-              <path id="eyebrow-left" d="M 135 116 Q 155 110 175 118"/>
-              <path id="eyebrow-right" d="M 225 118 Q 245 110 265 116"/>
+            <path d="M 112 120 Q 126 112 140 118" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M 180 118 Q 194 112 208 120" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+            <!-- Pink Nose -->
+            <polygon points="154,176 166,176 160,184" fill="#fb7185"/>
+
+            <!-- Closed Smile Mouth -->
+            <path id="mouth-closed" d="M 148 186 Q 160 196 160 188 Q 160 196 172 186" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+            <!-- Open Mouth (Talking / Eating) -->
+            <g id="mouth-open" style="display: none;">
+              <path d="M 148 186 Q 160 216 172 186 Z" fill="#881337" stroke="#475569" stroke-width="2"/>
+              <path id="mouth-tongue" d="M 152 200 Q 160 215 168 200 Z" fill="#fb7185"/>
+              <polygon points="157,186 163,186 160,191" fill="#ffffff"/>
             </g>
 
-            <!-- Mouth & Tongue -->
-            <g id="tom-mouth-group">
-              <path id="mouth-line" d="M 180 220 Q 200 232 220 220" stroke="#333" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-              <path id="mouth-open" d="M 180 220 Q 200 265 220 220 Z" fill="#660011" class="hidden"/>
-              <path id="mouth-tongue" d="M 188 238 Q 200 244 212 238 Q 200 260 188 238 Z" fill="#ff4081" class="hidden"/>
-              <polygon id="tooth-left" points="188,220 193,227 197,220" fill="#fff" class="hidden"/>
-              <polygon id="tooth-right" points="203,220 207,227 212,220" fill="#fff" class="hidden"/>
+            <!-- Hats -->
+            <g id="hat-party" style="display: none;">
+              <polygon points="135,100 160,18 185,100" fill="#ec4899"/>
+              <polygon points="142,75 160,18 178,75" fill="#facc15"/>
+              <circle cx="160" cy="15" r="9" fill="#06b6d4"/>
             </g>
 
-            <!-- Dizzy Stars -->
-            <g id="dizzy-stars" class="hidden">
-              <text x="120" y="80" font-size="28" class="spin-star">💫</text>
-              <text x="200" y="50" font-size="28" class="spin-star delay-1">⭐</text>
-              <text x="260" y="80" font-size="28" class="spin-star delay-2">💫</text>
+            <g id="hat-wizard" style="display: none;">
+              <ellipse cx="160" cy="100" rx="45" ry="14" fill="#4338ca"/>
+              <polygon points="130,96 160,10 190,96" fill="#6366f1"/>
+              <polygon points="160,35 164,45 174,45 166,51 169,61 160,55 151,61 154,51 146,45 156,45" fill="#fde047"/>
             </g>
 
-            <!-- Accessories: Sunglasses -->
-            <g id="acc-sunglasses" class="acc-item hidden">
-              <path d="M 175 146 Q 200 142 225 146" stroke="#111" stroke-width="5" fill="none"/>
-              <rect x="130" y="130" width="48" height="38" rx="10" fill="#111111" stroke="#333" stroke-width="3"/>
-              <line x1="135" y1="135" x2="160" y2="160" stroke="#fff" stroke-width="3" opacity="0.4"/>
-              <rect x="222" y="130" width="48" height="38" rx="10" fill="#111111" stroke="#333" stroke-width="3"/>
-              <line x1="227" y1="135" x2="252" y2="160" stroke="#fff" stroke-width="3" opacity="0.4"/>
+            <g id="hat-crown" style="display: none;">
+              <polygon points="130,96 130,65 145,78 160,60 175,78 190,65 190,96" fill="#f59e0b" stroke="#b45309" stroke-width="2"/>
+              <circle cx="130" cy="65" r="4" fill="#ef4444"/>
+              <circle cx="160" cy="60" r="5" fill="#3b82f6"/>
+              <circle cx="190" cy="65" r="4" fill="#10b981"/>
             </g>
 
-            <!-- Accessories: Party Hat -->
-            <g id="acc-hat" class="acc-item hidden">
-              <polygon points="150,90 200,-10 250,90" fill="#9c27b0" stroke="#ffeb3b" stroke-width="4"/>
-              <ellipse cx="200" cy="90" rx="55" ry="12" fill="#7b1fa2"/>
-              <circle cx="200" cy="-10" r="10" fill="#ffeb3b"/>
-              <text x="188" y="55" font-size="16" fill="#fff">⭐</text>
+            <!-- Glasses -->
+            <g id="glasses-cool" style="display: none;">
+              <rect x="110" y="136" width="34" height="24" rx="6" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+              <rect x="176" y="136" width="34" height="24" rx="6" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+              <line x1="144" y1="144" x2="176" y2="144" stroke="#0f172a" stroke-width="4"/>
+              <line x1="114" y1="140" x2="128" y2="156" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+              <line x1="180" y1="140" x2="194" y2="156" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
             </g>
 
-            <!-- Accessories: Nightcap -->
-            <g id="acc-nightcap" class="acc-item hidden">
-              <path d="M 140 100 Q 200 40 270 95 Q 310 130 330 200 Q 315 200 290 140 Q 220 70 140 100 Z" fill="#2196f3"/>
-              <circle cx="330" cy="200" r="14" fill="#ffffff"/>
-              <ellipse cx="200" cy="98" rx="65" ry="12" fill="#e3f2fd"/>
-            </g>
           </g>
         </svg>
 
-        <!-- Animated Floating Zzz -->
-        <div id="sleep-zzz" class="sleep-zzz hidden">
-          <span class="z-item z1">Z</span>
-          <span class="z-item z2">z</span>
-          <span class="z-item z3">z</span>
-        </div>
       </div>
+    </div>
 
-      <!-- KITCHEN DRAWER: Food items -->
-      <div id="kitchen-drawer" class="drawer-panel hidden">
-        <div class="drawer-header">Tom Ko Khana Khilao 🍽️</div>
-        <div class="food-shelf">
-          <button class="food-btn" data-food="milk" title="Doodh (Milk)">
-            <span class="food-emoji">🥛</span>
-            <span class="food-name">Doodh</span>
-          </button>
-          <button class="food-btn" data-food="fish" title="Tazi Machhli (Fish)">
-            <span class="food-emoji">🐟</span>
-            <span class="food-name">Machhli</span>
-          </button>
-          <button class="food-btn" data-food="cake" title="Mitha Cake (Cake)">
-            <span class="food-emoji">🧁</span>
-            <span class="food-name">Cake</span>
-          </button>
-          <button class="food-btn" data-food="chili" title="Teekhi Mirchi! (Spicy Chili)">
-            <span class="food-emoji">🌶️</span>
-            <span class="food-name">Mirchi!</span>
-          </button>
-          <button class="food-btn" data-food="watermelon" title="Tarbooz (Watermelon)">
-            <span class="food-emoji">🍉</span>
-            <span class="food-name">Tarbooz</span>
-          </button>
-        </div>
+    <!-- Floating Microphone Button -->
+    <div id="mic-btn" class="mic-btn-floating" title="Tom se baat karo / Mic tap karo!">
+      🎙️
+    </div>
+
+    <!-- Kitchen Tray (Foods) -->
+    <div id="tray-kitchen" class="action-tray" style="display: none;">
+      <div class="tray-item food-item" data-food="milk" title="Doodh pilao">
+        🥛<span class="label">Doodh</span>
       </div>
-
-      <!-- BATHROOM TOOLS -->
-      <div id="bath-drawer" class="drawer-panel hidden">
-        <div class="drawer-header">Tom Ko Nahlao 🛁</div>
-        <div class="bath-shelf">
-          <button id="btn-soap" class="tool-btn" title="Sabun Lagao">
-            <span class="tool-emoji">🧼</span>
-            <span class="tool-name">Sabun</span>
-          </button>
-          <button id="btn-shower" class="tool-btn" title="Pani Se Nahlao">
-            <span class="tool-emoji">🚿</span>
-            <span class="tool-name">Shower</span>
-          </button>
-          <button id="btn-potty" class="tool-btn" title="Toilet / Potty">
-            <span class="tool-emoji">🚽</span>
-            <span class="tool-name">Toilet</span>
-          </button>
-        </div>
+      <div class="tray-item food-item" data-food="fish" title="Machhli khilao">
+        🐟<span class="label">Fish</span>
       </div>
-
-      <!-- BEDROOM CONTROLS: Lamp Switch -->
-      <div id="bedroom-controls" class="bedroom-panel hidden">
-        <button id="btn-lamp" class="lamp-btn" title="Batti Gul / Jalayein">
-          <span class="lamp-emoji">💡</span>
-          <span id="lamp-label">Batti Band Karo</span>
-        </button>
+      <div class="tray-item food-item" data-food="burger" title="Burger khilao">
+        🍔<span class="label">Burger</span>
       </div>
-
-      <!-- WARDROBE DRAWER -->
-      <div id="wardrobe-drawer" class="drawer-panel hidden">
-        <div class="drawer-header">Tom Ke Kapde Aur Chashma 🕶️</div>
-        <div class="wardrobe-shelf">
-          <button class="wardrobe-btn" data-acc="hat">
-            <span class="tool-emoji">🎩</span>
-            <span class="tool-name">Party Topi</span>
-          </button>
-          <button class="wardrobe-btn" data-acc="sunglasses">
-            <span class="tool-emoji">🕶️</span>
-            <span class="tool-name">Kala Chashma</span>
-          </button>
-          <button class="wardrobe-btn" data-acc="bowtie">
-            <span class="tool-emoji">🎀</span>
-            <span class="tool-name">Tie</span>
-          </button>
-        </div>
+      <div class="tray-item food-item" data-food="chili" title="Tikhi Mirchi! Fire reaction!">
+        🌶️<span class="label">Mirchi</span>
       </div>
-
-      <!-- TALKING TOM MIC STATUS BAR -->
-      <div id="mic-status-box" class="mic-status-box hidden">
-        <div class="mic-pulsing-wave">
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-        </div>
-        <span id="mic-label">Tom Sun Raha Hai... Bolo! 🎤</span>
+      <div class="tray-item food-item" data-food="icecream" title="Ice Cream freeze!">
+        🍦<span class="label">Kulfi</span>
       </div>
+    </div>
 
-      <!-- QUICK TALK / TEXT INPUT DRAWER -->
-      <div id="talk-input-drawer" class="drawer-panel hidden">
-        <div class="drawer-header">Tom Se Baat Karo 💬</div>
-        <div class="talk-input-row">
-          <input type="text" id="talk-text-input" placeholder="Kuch bolo... (jaise: Tom tum kaise ho?)">
-          <button id="btn-send-talk">Bolo 🗣️</button>
-        </div>
-        <div class="quick-phrases">
-          <button class="phrase-chip" data-phrase="Meow! Main ek pyari billi hoon!">🐱 Pyari Billi</button>
-          <button class="phrase-chip" data-phrase="Namaste dost! Mujhse dosti karoge?">👋 Namaste!</button>
-          <button class="phrase-chip" data-phrase="Haha! Gudgudi mat karo!">😂 Gudgudi</button>
-          <button class="phrase-chip" data-phrase="Mujhe tazi machhli aur doodh do!">🐟 Bhookh lagi</button>
-        </div>
+    <!-- Bathroom Tray -->
+    <div id="tray-bathroom" class="action-tray" style="display: none;">
+      <div class="tray-item" data-tool="soap" title="Sabun se jhaag banao">
+        🧼<span class="label">Sabun</span>
       </div>
-
-      <!-- MINI-GAME MODAL -->
-      <div id="mini-game-modal" class="modal-overlay hidden">
-        <div class="mini-game-container">
-          <div class="mini-game-header">
-            <span>🎮 Machhli Pakdo Game</span>
-            <span id="game-score-display">Score: 0 | 🪙 0</span>
-            <button id="btn-close-game" class="close-game-btn">✕</button>
-          </div>
-          <canvas id="mini-game-canvas" width="340" height="420"></canvas>
-          <div class="mini-game-controls">
-            <button id="btn-move-left" class="game-ctrl-btn">◀ Left</button>
-            <span class="game-hint">Screen par drag ya touch karo!</span>
-            <button id="btn-move-right" class="game-ctrl-btn">Right ▶</button>
-          </div>
-        </div>
+      <div class="tray-item" data-tool="shower" title="Shower se dho do">
+        🚿<span class="label">Shower</span>
       </div>
-    </main>
+    </div>
 
-    <!-- BOTTOM ROOM NAVIGATION BAR -->
-    <nav class="bottom-nav">
-      <button class="nav-tab active" data-room="living" title="Living Room">
-        <span class="nav-icon">🛋️</span>
-        <span class="nav-label">Ghar</span>
-      </button>
-      <button class="nav-tab" data-room="kitchen" title="Rasoi (Kitchen)">
-        <span class="nav-icon">🍽️</span>
-        <span class="nav-label">Khana</span>
-      </button>
-      <button class="nav-tab" data-room="bath" title="Bathroom">
-        <span class="nav-icon">🛁</span>
-        <span class="nav-label">Nahana</span>
-      </button>
-      <button class="nav-tab" data-room="bedroom" title="Bedroom">
-        <span class="nav-icon">🛏️</span>
-        <span class="nav-label">Sona</span>
-      </button>
-      <button class="nav-tab" data-room="game" title="Mini Games">
-        <span class="nav-icon">🎮</span>
-        <span class="nav-label">Game</span>
-      </button>
-      <button id="btn-mic-toggle" class="nav-tab mic-tab" title="Awaz Mimic / Talking Tom">
-        <span class="nav-icon">🎙️</span>
-        <span class="nav-label">Bolo</span>
-      </button>
-      <button id="btn-wardrobe-toggle" class="nav-tab" title="Kapde Badlo">
-        <span class="nav-icon">🎩</span>
-        <span class="nav-label">Fashion</span>
-      </button>
+    <!-- Living Room Tray -->
+    <div id="tray-living" class="action-tray">
+      <div class="tray-item" id="btn-open-wardrobe" title="Kapde aur topi badlo">
+        🎩<span class="label">Almari</span>
+      </div>
+      <div class="tray-item" id="btn-open-game" title="Mini Game khelo">
+        🎮<span class="label">Game</span>
+      </div>
+      <div class="tray-item" onclick="openTalkModal()" title="Kuch bolvao">
+        💬<span class="label">Bolvao</span>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <nav id="bottom-nav">
+      <div class="nav-tab active" data-room="living">
+        <span class="tab-icon">🛋️</span>
+        <span class="tab-name">Baithak</span>
+      </div>
+      <div class="nav-tab" data-room="kitchen">
+        <span class="tab-icon">🍽️</span>
+        <span class="tab-name">Rasoi</span>
+      </div>
+      <div class="nav-tab" data-room="bathroom">
+        <span class="tab-icon">🛁</span>
+        <span class="tab-name">Nahana</span>
+      </div>
+      <div class="nav-tab" data-room="bedroom">
+        <span class="tab-icon">🛏️</span>
+        <span class="tab-name">Kamra</span>
+      </div>
     </nav>
+
+    <!-- Modal 1: Wardrobe -->
+    <div id="wardrobe-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">🎩 Tom Ki Almari (Wardrobe)</div>
+          <button class="btn-close">&times;</button>
+        </div>
+
+        <h4 style="margin: 8px 0; color: #475569;">Topi (Hats)</h4>
+        <div class="wardrobe-grid">
+          <div class="wardrobe-item equipped" data-type="hat" data-value="none">
+            <span class="item-icon">❌</span>
+            <span class="item-name">Koi nahi</span>
+          </div>
+          <div class="wardrobe-item" data-type="hat" data-value="party">
+            <span class="item-icon">🥳</span>
+            <span class="item-name">Party Hat</span>
+          </div>
+          <div class="wardrobe-item" data-type="hat" data-value="wizard">
+            <span class="item-icon">🧙</span>
+            <span class="item-name">Jaadugar</span>
+          </div>
+          <div class="wardrobe-item" data-type="hat" data-value="crown">
+            <span class="item-icon">👑</span>
+            <span class="item-name">Taaj (Crown)</span>
+          </div>
+        </div>
+
+        <h4 style="margin: 8px 0; color: #475569;">Chashma (Glasses)</h4>
+        <div class="wardrobe-grid">
+          <div class="wardrobe-item equipped" data-type="glasses" data-value="none">
+            <span class="item-icon">❌</span>
+            <span class="item-name">Koi nahi</span>
+          </div>
+          <div class="wardrobe-item" data-type="glasses" data-value="cool">
+            <span class="item-icon">🕶️</span>
+            <span class="item-name">Cool Shades</span>
+          </div>
+        </div>
+
+        <h4 style="margin: 8px 0; color: #475569;">Billi Ka Rang (Fur Color)</h4>
+        <div class="wardrobe-grid">
+          <div class="wardrobe-item equipped" data-type="fur" data-value="grey">
+            <span class="item-icon">🩶</span>
+            <span class="item-name">Classic Grey</span>
+          </div>
+          <div class="wardrobe-item" data-type="fur" data-value="orange">
+            <span class="item-icon">🧡</span>
+            <span class="item-name">Ginger Billi</span>
+          </div>
+          <div class="wardrobe-item" data-type="fur" data-value="black">
+            <span class="item-icon">🖤</span>
+            <span class="item-name">Black Panther</span>
+          </div>
+          <div class="wardrobe-item" data-type="fur" data-value="white">
+            <span class="item-icon">🤍</span>
+            <span class="item-name">Snow White</span>
+          </div>
+        </div>
+
+        <h4 style="margin: 8px 0; color: #475569;">Gale Ka Band (Tie)</h4>
+        <div class="wardrobe-grid">
+          <div class="wardrobe-item equipped" data-type="accessory" data-value="none">
+            <span class="item-icon">❌</span>
+            <span class="item-name">Koi nahi</span>
+          </div>
+          <div class="wardrobe-item" data-type="accessory" data-value="bowtie">
+            <span class="item-icon">🎀</span>
+            <span class="item-name">Red Bowtie</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Talk To Tom -->
+    <div id="talk-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">💬 Tom Se Bolvao!</div>
+          <button class="btn-close">&times;</button>
+        </div>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 10px;">
+          Apna text likho ya neeche diye gaye funny phrases dabao. Tom apni funny cartoon aawaz me bolega!
+        </p>
+        <input type="text" id="talk-input" class="talk-input-box" placeholder="Yahan likho..." maxlength="80">
+        <button id="btn-send-talk" class="btn-game" style="width: 100%; margin: 0 0 14px 0;">Tom Ko Bolvao 🗣️</button>
+
+        <h4 style="margin-bottom: 8px; color: #334155; font-size: 13px;">Mazedaar Dialogues:</h4>
+        <div class="quick-phrases">
+          <div class="phrase-chip">Namaste bhai! Kaise ho? 😸</div>
+          <div class="phrase-chip">Bohot bhookh lagi hai! Khana do! 🐟</div>
+          <div class="phrase-chip">Hahaha! Pet me gudgudi mat karo! 😂</div>
+          <div class="phrase-chip">Mai hu sabse pyara Talking Tom! 👑</div>
+          <div class="phrase-chip">Arey wah! Maza hi aa gaya! 🌟</div>
+          <div class="phrase-chip">Mujhe neend aa rahi hai, sone do! 😴</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Arcade Mini Game ("Catch The Fish") -->
+    <div id="minigame-modal" class="modal-overlay">
+      <div class="modal-card" style="align-items: center;">
+        <div class="modal-header" style="width: 100%;">
+          <div class="modal-title">🎮 Machhli Pakdo (Fish Catcher)</div>
+          <button class="btn-close">&times;</button>
+        </div>
+
+        <div class="minigame-hud">
+          <span id="mg-score">Score: 0</span>
+          <span id="mg-lives">❤️ ❤️ ❤️</span>
+        </div>
+
+        <canvas id="minigame-canvas" width="320" height="380"></canvas>
+
+        <p style="font-size: 12px; color: #64748b; margin-top: 8px; text-align: center;">
+          Finger ya Mouse se Tom ki tokri ghumao! 🐟 Machhli aur 🪙 Coins pakdo, 💣 Bombs se bacho!
+        </p>
+
+        <button id="btn-start-mg" class="btn-game">Khel Shuru Karo ▶️</button>
+      </div>
+    </div>
+
   </div>
 
   <script src="game.js"></script>

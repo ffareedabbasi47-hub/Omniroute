@@ -1,45 +1,43 @@
-/* ====================================================
-   MY TALKING TOM 2 - COMPLETE GAME ENGINE (game.js)
-   Full Interactive Audio, Animations, AI Mimic & Rooms
-   ==================================================== */
+/* ========================================================
+   Talking Tom Cat 2 - Ultimate Web Game
+   JavaScript Engine: Audio, Animations, Physics & Gameplay
+   ======================================================== */
 
-// --- GLOBAL GAME STATE ---
-const state = {
-  hunger: 70,     // 0 - 100
-  hygiene: 80,    // 0 - 100
-  energy: 85,     // 0 - 100
-  fun: 80,        // 0 - 100
+// --- Global State ---
+const State = {
+  hunger: 80,
+  hygiene: 75,
+  energy: 90,
+  happy: 85,
   coins: 150,
-  currentRoom: 'living', // living, kitchen, bath, bedroom, game
+  level: 1,
+  xp: 40,
+  activeRoom: 'living',
+  activeTool: null,
   isSleeping: false,
-  isRecording: false,
   isSpeaking: false,
-  isChewing: false,
-  activeAccessories: {
-    hat: false,
-    sunglasses: false,
-    bowtie: false
-  }
+  isDizzy: false,
+  isEating: false,
+  hat: 'none',
+  glasses: 'none',
+  fur: 'grey',
+  accessory: 'none'
 };
 
-// --- AUDIO SYNTHESIZER (100% Procedural Web Audio API) ---
+// --- Web Audio API Synthesizer (Zero External Dependencies) ---
 let audioCtx = null;
 
 function initAudio() {
   if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
-    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  if (audioCtx && audioCtx.state === 'suspended') {
+  if (audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
 }
 
-// Procedural Sound Effects
-const SFX = {
-  meow: function(pitch = 1.0) {
+const SoundFX = {
+  meow(pitch = 520) {
     initAudio();
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
@@ -47,133 +45,117 @@ const SFX = {
     const now = audioCtx.currentTime;
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(450 * pitch, now);
-    osc.frequency.exponentialRampToValueAtTime(750 * pitch, now + 0.18);
-    osc.frequency.exponentialRampToValueAtTime(320 * pitch, now + 0.5);
+    osc.frequency.setValueAtTime(pitch, now);
+    osc.frequency.exponentialRampToValueAtTime(pitch * 1.3, now + 0.15);
+    osc.frequency.exponentialRampToValueAtTime(pitch * 0.75, now + 0.45);
 
-    gain.gain.setValueAtTime(0, now);
+    gain.gain.setValueAtTime(0.01, now);
     gain.gain.linearRampToValueAtTime(0.28, now + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.52);
-  },
-
-  purr: function() {
-    initAudio();
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const lfo = audioCtx.createOscillator();
-    const lfoGain = audioCtx.createGain();
-    const gain = audioCtx.createGain();
-    const now = audioCtx.currentTime;
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(70, now);
-
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(26, now); // 26Hz purr vibration
-    lfoGain.gain.setValueAtTime(35, now);
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(osc.frequency);
-
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    lfo.start(now);
-    osc.start(now);
-    lfo.stop(now + 0.65);
-    osc.stop(now + 0.65);
-  },
-
-  bonk: function() {
-    initAudio();
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const now = audioCtx.currentTime;
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(320, now);
-    osc.frequency.exponentialRampToValueAtTime(70, now + 0.2);
-
-    gain.gain.setValueAtTime(0.4, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.22);
-  },
-
-  giggle: function() {
-    initAudio();
-    if (!audioCtx) return;
-    [0, 0.09, 0.18].forEach((offset, idx) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      const now = audioCtx.currentTime + offset;
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(600 + idx * 80, now);
-      osc.frequency.linearRampToValueAtTime(800 + idx * 80, now + 0.07);
-
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(now);
-      osc.stop(now + 0.08);
-    });
-  },
-
-  chew: function() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(220, now);
-    osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
-
-    gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.1);
-  },
-
-  spicy: function() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(800, now);
-    osc.frequency.exponentialRampToValueAtTime(1400, now + 0.4);
-    gain.gain.setValueAtTime(0.35, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(now);
     osc.stop(now + 0.45);
   },
 
-  splash: function() {
+  purr() {
     initAudio();
     if (!audioCtx) return;
-    const bufferSize = audioCtx.sampleRate * 0.35;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const lfo = audioCtx.createOscillator();
+    const lfoGain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(45, now);
+
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(22, now); // 22Hz purr rumble
+    lfoGain.gain.setValueAtTime(0.08, now);
+
+    lfo.connect(gain.gain);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.5);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(now);
+    lfo.start(now);
+    osc.stop(now + 0.5);
+    lfo.stop(now + 0.5);
+  },
+
+  tickle() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const t = now + i * 0.08;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1100 + i * 150, t);
+      osc.frequency.exponentialRampToValueAtTime(1400, t + 0.06);
+
+      gain.gain.setValueAtTime(0.15, t);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.06);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.06);
+    }
+  },
+
+  slap() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(280, now);
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.2);
+
+    gain.gain.setValueAtTime(0.35, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  },
+
+  boing() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(260, now);
+    osc.frequency.exponentialRampToValueAtTime(680, now + 0.25);
+
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.25);
+  },
+
+  crunch() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const bufferSize = audioCtx.sampleRate * 0.15;
     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -184,895 +166,1024 @@ const SFX = {
 
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = 850;
+    filter.frequency.setValueAtTime(1400, now);
 
     const gain = audioCtx.createGain();
-    gain.gain.value = 0.4;
+    gain.gain.setValueAtTime(0.3, now);
 
     noise.connect(filter);
     filter.connect(gain);
     gain.connect(audioCtx.destination);
-    noise.start();
+    noise.start(now);
   },
 
-  bubblePop: function() {
-    initAudio();
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const now = audioCtx.currentTime;
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(750, now);
-    osc.frequency.exponentialRampToValueAtTime(1600, now + 0.08);
-
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.09);
-  },
-
-  flush: function() {
-    initAudio();
-    if (!audioCtx) return;
-    const bufferSize = audioCtx.sampleRate * 1.2;
-    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-    }
-    const noise = audioCtx.createBufferSource();
-    noise.buffer = buffer;
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
-    filter.frequency.linearRampToValueAtTime(300, audioCtx.currentTime + 1.2);
-
-    noise.connect(filter);
-    filter.connect(audioCtx.destination);
-    noise.start();
-  },
-
-  coin: function() {
+  gulp() {
     initAudio();
     if (!audioCtx) return;
     const now = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
+
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(987.77, now);
-    osc.frequency.setValueAtTime(1318.51, now + 0.08);
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(220, now + 0.18);
 
     gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
 
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(now);
-    osc.stop(now + 0.36);
+    osc.stop(now + 0.18);
+  },
+
+  burp() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(95, now);
+    osc.frequency.linearRampToValueAtTime(120, now + 0.1);
+    osc.frequency.linearRampToValueAtTime(80, now + 0.35);
+
+    gain.gain.setValueAtTime(0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.35);
+  },
+
+  splash() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(700, now);
+    osc.frequency.exponentialRampToValueAtTime(1300, now + 0.08);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.12);
+  },
+
+  snore() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.linearRampToValueAtTime(110, now + 0.8);
+
+    gain.gain.setValueAtTime(0.02, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.4);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.8);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.8);
+  },
+
+  coin() {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc1.type = 'sine';
+    osc2.type = 'sine';
+    osc1.frequency.setValueAtTime(987.77, now); // B5
+    osc2.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc1.start(now);
+    osc1.stop(now + 0.08);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.35);
+  },
+
+  levelUp() {
+    initAudio();
+    if (!audioCtx) return;
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    const now = audioCtx.currentTime;
+    notes.forEach((freq, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const t = now + idx * 0.1;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.25);
+    });
   }
 };
 
-// --- DOM ELEMENTS ---
-const el = {
-  app: document.getElementById('game-app'),
-  scene: document.getElementById('scene-viewport'),
-  barFun: document.getElementById('bar-fun'),
-  barHunger: document.getElementById('bar-hunger'),
-  barHygiene: document.getElementById('bar-hygiene'),
-  barEnergy: document.getElementById('bar-energy'),
-  coinCount: document.getElementById('coin-count'),
-  speechBubble: document.getElementById('speech-bubble'),
-  speechText: document.getElementById('speech-text'),
-  nightOverlay: document.getElementById('night-overlay'),
-  sleepZzz: document.getElementById('sleep-zzz'),
-  dirtSpots: document.getElementById('dirt-spots'),
-  soapLayer: document.getElementById('soap-layer'),
-  tomSvg: document.getElementById('tom-svg'),
-  fxLayer: document.getElementById('fx-layer'),
+// --- DOM References ---
+const characterStage = document.getElementById('character-stage');
+const tomSvg = document.getElementById('tom-svg');
+const speechBubble = document.getElementById('speech-bubble');
+const eyeLeftPupil = document.getElementById('eye-left-pupil');
+const eyeRightPupil = document.getElementById('eye-right-pupil');
+const eyeLeftIris = document.getElementById('eye-left-iris');
+const eyeRightIris = document.getElementById('eye-right-iris');
+const mouthClosed = document.getElementById('mouth-closed');
+const mouthOpen = document.getElementById('mouth-open');
+const eyesEyelids = document.querySelectorAll('.cat-eyelid');
+const fxContainer = document.getElementById('fx-container');
+const micBtn = document.getElementById('mic-btn');
 
-  // Drawers
-  kitchenDrawer: document.getElementById('kitchen-drawer'),
-  bathDrawer: document.getElementById('bath-drawer'),
-  bedroomControls: document.getElementById('bedroom-controls'),
-  wardrobeDrawer: document.getElementById('wardrobe-drawer'),
-  talkInputDrawer: document.getElementById('talk-input-drawer'),
-  micStatusBox: document.getElementById('mic-status-box'),
-  micLabel: document.getElementById('mic-label'),
-
-  // Lamp
-  btnLamp: document.getElementById('btn-lamp'),
-  lampLabel: document.getElementById('lamp-label'),
-
-  // Facial elements
-  pupilLeft: document.getElementById('pupil-left'),
-  pupilRight: document.getElementById('pupil-right'),
-  irisLeft: document.getElementById('iris-left'),
-  irisRight: document.getElementById('iris-right'),
-  eyelidLeft: document.getElementById('eyelid-left'),
-  eyelidRight: document.getElementById('eyelid-right'),
-  mouthLine: document.getElementById('mouth-line'),
-  mouthOpen: document.getElementById('mouth-open'),
-  mouthTongue: document.getElementById('mouth-tongue'),
-  toothLeft: document.getElementById('tooth-left'),
-  toothRight: document.getElementById('tooth-right'),
-  dizzyStars: document.getElementById('dizzy-stars'),
-
-  // Accessories
-  accHat: document.getElementById('acc-hat'),
-  accSunglasses: document.getElementById('acc-sunglasses'),
-  accBowtie: document.getElementById('acc-bowtie'),
-  accNightcap: document.getElementById('acc-nightcap'),
-
-  // Navigation
-  navTabs: document.querySelectorAll('.nav-tab'),
-  btnMicToggle: document.getElementById('btn-mic-toggle'),
-  btnWardrobeToggle: document.getElementById('btn-wardrobe-toggle'),
-
-  // Mini-Game
-  miniGameModal: document.getElementById('mini-game-modal'),
-  btnCloseGame: document.getElementById('btn-close-game'),
-  gameScoreDisplay: document.getElementById('game-score-display'),
-  canvas: document.getElementById('mini-game-canvas'),
-  btnMoveLeft: document.getElementById('btn-move-left'),
-  btnMoveRight: document.getElementById('btn-move-right'),
-
-  // Talk Input
-  talkTextInput: document.getElementById('talk-text-input'),
-  btnSendTalk: document.getElementById('btn-send-talk')
-};
-
-// --- UI UPDATERS ---
-function updateStatusBars() {
-  el.barFun.style.width = `${Math.max(0, Math.min(100, state.fun))}%`;
-  el.barHunger.style.width = `${Math.max(0, Math.min(100, state.hunger))}%`;
-  el.barHygiene.style.width = `${Math.max(0, Math.min(100, state.hygiene))}%`;
-  el.barEnergy.style.width = `${Math.max(0, Math.min(100, state.energy))}%`;
-  el.coinCount.textContent = state.coins;
-
-  if (state.hygiene < 45) {
-    el.dirtSpots.classList.remove('hidden');
-  } else {
-    el.dirtSpots.classList.add('hidden');
+// --- Haptic Feedback Helper ---
+function vibrate(ms = 25) {
+  if (navigator.vibrate) {
+    try { navigator.vibrate(ms); } catch (e) {}
   }
 }
 
-function showSpeech(text, duration = 3000) {
-  el.speechText.textContent = text;
-  el.speechBubble.classList.remove('hidden');
-  clearTimeout(el.speechBubble._timeout);
-  el.speechBubble._timeout = setTimeout(() => {
-    el.speechBubble.classList.add('hidden');
+// --- Status & Progression System ---
+function updateHUD() {
+  document.getElementById('val-hunger').style.width = `${State.hunger}%`;
+  document.getElementById('val-hygiene').style.width = `${State.hygiene}%`;
+  document.getElementById('val-energy').style.width = `${State.energy}%`;
+  document.getElementById('val-happy').style.width = `${State.happy}%`;
+  document.getElementById('user-coins').innerText = State.coins;
+  document.getElementById('user-level').innerText = `Lv. ${State.level}`;
+  saveProgress();
+}
+
+function addXP(amount) {
+  State.xp += amount;
+  if (State.xp >= 100) {
+    State.xp -= 100;
+    State.level += 1;
+    State.coins += 50;
+    SoundFX.levelUp();
+    showSpeechBubble(`🎉 Level Up! Level ${State.level} ban gaye! (+50 🪙)`);
+    spawnFloatingText(characterStage.offsetLeft + 160, characterStage.offsetTop + 40, 'LEVEL UP! 🌟');
+  }
+  updateHUD();
+}
+
+function addCoins(amount) {
+  State.coins += amount;
+  SoundFX.coin();
+  updateHUD();
+}
+
+// --- Floating FX Generator ---
+function spawnFloatingText(x, y, text, color = '#f59e0b') {
+  const el = document.createElement('div');
+  el.className = 'floating-heart';
+  el.innerText = text;
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.style.color = color;
+  el.style.fontWeight = 'bold';
+  fxContainer.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+function spawnHeart(x, y) {
+  const emojis = ['💖', '😻', '✨', '🐾', '💕'];
+  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+  const el = document.createElement('div');
+  el.className = 'floating-heart';
+  el.innerText = emoji;
+  el.style.left = `${x + (Math.random() * 40 - 20)}px`;
+  el.style.top = `${y}px`;
+  fxContainer.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+function showSpeechBubble(text, duration = 3000) {
+  speechBubble.innerText = text;
+  speechBubble.classList.add('active');
+  clearTimeout(speechBubble._timer);
+  speechBubble._timer = setTimeout(() => {
+    speechBubble.classList.remove('active');
   }, duration);
 }
 
-function spawnFX(emoji, x, y) {
-  const fx = document.createElement('div');
-  fx.className = 'floating-fx';
-  fx.textContent = emoji;
-  fx.style.left = `${x}px`;
-  fx.style.top = `${y}px`;
-  el.fxLayer.appendChild(fx);
-  setTimeout(() => fx.remove(), 1200);
-}
-
-// --- TOM EXPRESSIONS & ANIMATIONS ---
-function setMouthOpen(open = true) {
-  if (open) {
-    el.mouthLine.classList.add('hidden');
-    el.mouthOpen.classList.remove('hidden');
-    el.mouthTongue.classList.remove('hidden');
-    el.toothLeft.classList.remove('hidden');
-    el.toothRight.classList.remove('hidden');
+// --- Cat Face & Expression Controllers ---
+function setCatMouth(isOpen) {
+  if (isOpen) {
+    mouthClosed.style.display = 'none';
+    mouthOpen.style.display = 'block';
   } else {
-    el.mouthLine.classList.remove('hidden');
-    el.mouthOpen.classList.add('hidden');
-    el.mouthTongue.classList.add('hidden');
-    el.toothLeft.classList.add('hidden');
-    el.toothRight.classList.add('hidden');
+    mouthClosed.style.display = 'block';
+    mouthOpen.style.display = 'none';
   }
 }
 
-function blinkEyes() {
-  if (state.isSleeping) return;
-  el.eyelidLeft.setAttribute('stroke-width', '40');
-  el.eyelidRight.setAttribute('stroke-width', '40');
+function setEyesClosed(closed) {
+  eyesEyelids.forEach(el => {
+    el.style.display = closed ? 'block' : 'none';
+  });
+  if (closed) {
+    eyeLeftPupil.style.opacity = '0';
+    eyeRightPupil.style.opacity = '0';
+  } else {
+    eyeLeftPupil.style.opacity = '1';
+    eyeRightPupil.style.opacity = '1';
+  }
+}
+
+// Natural Blinking Loop
+setInterval(() => {
+  if (State.isSleeping || State.isDizzy) return;
+  setEyesClosed(true);
   setTimeout(() => {
-    if (!state.isSleeping) {
-      el.eyelidLeft.setAttribute('stroke-width', '0');
-      el.eyelidRight.setAttribute('stroke-width', '0');
+    if (!State.isSleeping && !State.isDizzy) setEyesClosed(false);
+  }, 160);
+}, 3800);
+
+// --- Eye Tracking (Pupils follow pointer/touch) ---
+function trackEyes(clientX, clientY) {
+  if (State.isSleeping || State.isDizzy) return;
+  const rect = tomSvg.getBoundingClientRect();
+  const catCenterX = rect.left + rect.width / 2;
+  const catCenterY = rect.top + rect.height * 0.35;
+
+  const dx = clientX - catCenterX;
+  const dy = clientY - catCenterY;
+  const angle = Math.atan2(dy, dx);
+  const distance = Math.min(Math.hypot(dx, dy) / 40, 4.5);
+
+  const pupilX = Math.cos(angle) * distance;
+  const pupilY = Math.sin(angle) * distance;
+
+  eyeLeftPupil.setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
+  eyeRightPupil.setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
+  eyeLeftIris.setAttribute('transform', `translate(${pupilX * 0.6}, ${pupilY * 0.6})`);
+  eyeRightIris.setAttribute('transform', `translate(${pupilX * 0.6}, ${pupilY * 0.6})`);
+}
+
+window.addEventListener('pointermove', (e) => {
+  trackEyes(e.clientX, e.clientY);
+});
+
+// --- Cat Interactive Touch & Petting Behaviors ---
+let petCount = 0;
+let lastPetTime = 0;
+
+function handlePet(e) {
+  vibrate(20);
+  const now = Date.now();
+  if (now - lastPetTime > 250) {
+    SoundFX.purr();
+    lastPetTime = now;
+  }
+  
+  State.happy = Math.min(100, State.happy + 1.5);
+  addXP(1);
+  updateHUD();
+
+  tomSvg.classList.add('petting-happy');
+  setEyesClosed(true);
+  const rect = characterStage.getBoundingClientRect();
+  const x = (e.clientX || (e.touches && e.touches[0].clientX) || (rect.left + rect.width / 2)) - rect.left;
+  const y = (e.clientY || (e.touches && e.touches[0].clientY) || (rect.top + 80)) - rect.top;
+  spawnHeart(x + rect.left, y + rect.top);
+
+  clearTimeout(tomSvg._petTimeout);
+  tomSvg._petTimeout = setTimeout(() => {
+    tomSvg.classList.remove('petting-happy');
+    if (!State.isSleeping) setEyesClosed(false);
+  }, 450);
+}
+
+function handleHeadTap() {
+  petCount++;
+  if (petCount >= 4) {
+    triggerDizzy();
+    petCount = 0;
+    return;
+  }
+  vibrate(35);
+  SoundFX.meow(600);
+  showSpeechBubble('Meow! ❤️');
+  State.happy = Math.min(100, State.happy + 2);
+  updateHUD();
+}
+
+function triggerDizzy() {
+  State.isDizzy = true;
+  vibrate(60);
+  SoundFX.slap();
+  SoundFX.boing();
+  tomSvg.classList.add('dizzy');
+  showSpeechBubble('Arey chakkar aa gaya! 😵💫');
+  setEyesClosed(true);
+
+  setTimeout(() => {
+    tomSvg.classList.remove('dizzy');
+    State.isDizzy = false;
+    setEyesClosed(false);
+  }, 900);
+}
+
+function handleBellyTickle() {
+  vibrate(30);
+  SoundFX.tickle();
+  tomSvg.classList.add('tickled');
+  setCatMouth(true);
+  showSpeechBubble('Hahaha! Gudgudi ho rahi hai! 😂');
+  State.happy = Math.min(100, State.happy + 3);
+  addXP(2);
+  updateHUD();
+
+  clearTimeout(tomSvg._tickleTimeout);
+  tomSvg._tickleTimeout = setTimeout(() => {
+    tomSvg.classList.remove('tickled');
+    setCatMouth(false);
+  }, 600);
+}
+
+function handleFootTap() {
+  vibrate(40);
+  SoundFX.meow(420);
+  showSpeechBubble('Meoww! Mere pair pe mat maaro! 🐾');
+}
+
+function handleTailTap() {
+  vibrate(45);
+  SoundFX.slap();
+  showSpeechBubble('Meri poonch mat kheecho! 😾');
+  const tail = document.getElementById('cat-tail');
+  if (tail) {
+    tail.style.transform = 'rotate(-25deg)';
+    setTimeout(() => { tail.style.transform = ''; }, 300);
+  }
+}
+
+// Bind Touch Hotspots
+document.querySelector('.zone-head').addEventListener('pointerdown', (e) => {
+  handleHeadTap();
+  handlePet(e);
+});
+document.querySelector('.zone-head').addEventListener('pointermove', (e) => {
+  if (e.buttons > 0) handlePet(e);
+});
+document.querySelector('.zone-belly').addEventListener('pointerdown', handleBellyTickle);
+document.querySelector('.zone-belly').addEventListener('pointermove', (e) => {
+  if (e.buttons > 0) handleBellyTickle();
+});
+document.querySelector('.zone-left-foot').addEventListener('pointerdown', handleFootTap);
+document.querySelector('.zone-right-foot').addEventListener('pointerdown', handleFootTap);
+document.querySelector('.zone-tail').addEventListener('pointerdown', handleTailTap);
+
+// --- Room Switching System ---
+function switchRoom(roomId) {
+  if (State.isSleeping && roomId !== 'bedroom') {
+    showSpeechBubble('Tom so raha hai! Pehle light jalao! 😴');
+    return;
+  }
+
+  State.activeRoom = roomId;
+  document.querySelectorAll('.room-bg').forEach(el => el.classList.remove('active'));
+  document.getElementById(`bg-${roomId}`).classList.add('active');
+
+  document.querySelectorAll('.action-tray').forEach(el => el.style.display = 'none');
+  const roomTray = document.getElementById(`tray-${roomId}`);
+  if (roomTray) roomTray.style.display = 'flex';
+
+  document.querySelectorAll('.nav-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.room === roomId);
+  });
+
+  SoundFX.boing();
+}
+
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    switchRoom(tab.dataset.room);
+  });
+});
+
+// --- Kitchen: Food Feeding System ---
+const Foods = {
+  milk: { name: 'Doodh', hunger: 15, xp: 5, emoji: '🥛', effect: 'normal' },
+  fish: { name: 'Machhli', hunger: 25, xp: 8, emoji: '🐟', effect: 'crunch' },
+  burger: { name: 'Burger', hunger: 35, xp: 12, emoji: '🍔', effect: 'big' },
+  chili: { name: 'Mirchi', hunger: 10, xp: 15, emoji: '🌶️', effect: 'spicy' },
+  icecream: { name: 'Ice Cream', hunger: 20, xp: 10, emoji: '🍦', effect: 'freeze' }
+};
+
+function feedTom(foodKey) {
+  if (State.isEating) return;
+  const food = Foods[foodKey];
+  if (!food) return;
+
+  State.isEating = true;
+  vibrate(30);
+
+  let chews = 0;
+  setCatMouth(true);
+  const chewInterval = setInterval(() => {
+    chews++;
+    SoundFX.crunch();
+    setCatMouth(chews % 2 === 1);
+    if (chews >= 5) {
+      clearInterval(chewInterval);
+      setCatMouth(false);
+      SoundFX.gulp();
+
+      if (food.effect === 'spicy') {
+        SoundFX.slap();
+        tomSvg.style.filter = 'drop-shadow(0 0 20px #ef4444) hue-rotate(-50deg)';
+        showSpeechBubble('AAG LAG GAYI! BOHOT TIKHA HAI! 🔥🌶️');
+        spawnFloatingText(characterStage.offsetLeft + 160, characterStage.offsetTop + 100, '🔥 AAAAAGH! 🔥', '#ef4444');
+        setTimeout(() => {
+          tomSvg.style.filter = '';
+          SoundFX.burp();
+          State.isEating = false;
+        }, 1800);
+      } else if (food.effect === 'freeze') {
+        tomSvg.style.filter = 'hue-rotate(160deg) drop-shadow(0 0 15px #67e8f9)';
+        showSpeechBubble('Brrr! Brain Freeze ho gaya! 🥶🍦');
+        setTimeout(() => {
+          tomSvg.style.filter = '';
+          State.isEating = false;
+        }, 1500);
+      } else {
+        setTimeout(() => {
+          SoundFX.burp();
+          showSpeechBubble(`Maza aa gaya! ${food.name} tasty tha! 😋`);
+          State.isEating = false;
+        }, 500);
+      }
+
+      State.hunger = Math.min(100, State.hunger + food.hunger);
+      addXP(food.xp);
+      updateHUD();
     }
   }, 180);
 }
 
-// Regular blinking
-setInterval(() => {
-  if (Math.random() > 0.3) {
-    blinkEyes();
-  }
-}, 3500);
-
-// Eye tracking pointer/finger
-function setupEyeTracking() {
-  const stage = document.getElementById('tom-stage');
-  window.addEventListener('pointermove', (e) => {
-    if (state.isSleeping) return;
-    const rect = stage.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height * 0.35;
-
-    const deltaX = (e.clientX - centerX) / (window.innerWidth / 2);
-    const deltaY = (e.clientY - centerY) / (window.innerHeight / 2);
-
-    const clampX = Math.max(-5, Math.min(5, deltaX * 5));
-    const clampY = Math.max(-5, Math.min(5, deltaY * 5));
-
-    el.pupilLeft.setAttribute('cx', 159 + clampX);
-    el.pupilLeft.setAttribute('cy', 150 + clampY);
-    el.pupilRight.setAttribute('cx', 241 + clampX);
-    el.pupilRight.setAttribute('cy', 150 + clampY);
+document.querySelectorAll('.food-item').forEach(item => {
+  item.addEventListener('click', () => {
+    feedTom(item.dataset.food);
   });
-}
-setupEyeTracking();
+});
 
-// Reaction: Poked / Slapped
-function triggerPokeReaction(e) {
-  initAudio();
-  if (state.isSleeping) {
-    wakeUpTom();
-    return;
+// --- Bathroom: Cleaning Tools ---
+let bubblesList = [];
+
+function selectBathTool(toolName) {
+  State.activeTool = State.activeTool === toolName ? null : toolName;
+  document.querySelectorAll('#tray-bathroom .tray-item').forEach(btn => {
+    btn.classList.toggle('active-tool', btn.dataset.tool === State.activeTool);
+  });
+  if (State.activeTool === 'soap') {
+    showSpeechBubble('Tom ke upar sabun lagao! 🧼');
+  } else if (State.activeTool === 'shower') {
+    showSpeechBubble('Shower se jhaag dho do! 🚿');
   }
-  SFX.bonk();
-  SFX.meow(0.85);
-
-  const rect = el.scene.getBoundingClientRect();
-  const x = e ? e.clientX - rect.left : rect.width / 2;
-  const y = e ? e.clientY - rect.top : rect.height / 2;
-  spawnFX('💥', x, y);
-
-  el.tomSvg.classList.add('anim-slap');
-  el.dizzyStars.classList.remove('hidden');
-
-  state.fun = Math.max(0, state.fun - 8);
-  updateStatusBars();
-  showSpeech("Arey! Aise mat maro yaar! 😵", 2000);
-
-  setTimeout(() => {
-    el.tomSvg.classList.remove('anim-slap');
-    el.dizzyStars.classList.add('hidden');
-  }, 1200);
 }
 
-// Reaction: Petting / Tickling Belly
-let petCounter = 0;
+document.querySelectorAll('#tray-bathroom .tray-item').forEach(btn => {
+  btn.addEventListener('click', () => selectBathTool(btn.dataset.tool));
+});
 
-function handlePetting(e) {
-  initAudio();
-  if (state.isSleeping) return;
-  petCounter++;
-  if (petCounter % 5 === 0) {
-    SFX.purr();
-    SFX.giggle();
+characterStage.addEventListener('pointermove', (e) => {
+  if (State.activeRoom !== 'bathroom') return;
+  const rect = characterStage.getBoundingClientRect();
+  const relX = e.clientX - rect.left;
+  const relY = e.clientY - rect.top;
 
-    const rect = el.scene.getBoundingClientRect();
-    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
-    const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
-    const hearts = ['❤️', '💖', '✨', '🐾', '😻'];
-    spawnFX(hearts[Math.floor(Math.random() * hearts.length)], x, y);
-
-    setMouthOpen(true);
-    el.tomSvg.classList.add('anim-purr');
-
-    state.fun = Math.min(100, state.fun + 4);
-    updateStatusBars();
-
-    clearTimeout(handlePetting._timeout);
-    handlePetting._timeout = setTimeout(() => {
-      setMouthOpen(false);
-      el.tomSvg.classList.remove('anim-purr');
-    }, 400);
-
-    if (petCounter % 25 === 0) {
-      showSpeech("Haha! Gudgudi ho rahi hai! 😂❤️", 2500);
-      state.coins += 2;
-      SFX.coin();
-      updateStatusBars();
+  if (State.activeTool === 'soap' && e.buttons > 0) {
+    if (Math.random() < 0.4) {
+      createSoapBubble(relX, relY);
+      SoundFX.splash();
+      vibrate(15);
     }
+  } else if (State.activeTool === 'shower' && e.buttons > 0) {
+    washSoapBubbles(relX, relY);
   }
-}
+});
 
-// Setup Touch Reactions
-function setupTouchReactions() {
-  const belly = document.getElementById('tom-torso');
-  const head = document.getElementById('tom-head-base');
-  const feet = document.getElementById('tom-feet');
+function createSoapBubble(x, y) {
+  if (bubblesList.length > 25) return;
+  const bubble = document.createElement('div');
+  const size = Math.floor(Math.random() * 25) + 20;
+  bubble.className = 'bubble';
+  bubble.style.width = `${size}px`;
+  bubble.style.height = `${size}px`;
+  bubble.style.left = `${x - size / 2}px`;
+  bubble.style.top = `${y - size / 2}px`;
+  characterStage.appendChild(bubble);
+  bubblesList.push(bubble);
 
-  belly.addEventListener('pointermove', handlePetting);
-  belly.addEventListener('touchmove', handlePetting);
-  head.addEventListener('click', (e) => triggerPokeReaction(e));
-
-  feet.addEventListener('click', (e) => {
-    initAudio();
-    SFX.meow(1.3);
-    const rect = el.scene.getBoundingClientRect();
-    spawnFX('🐾', e.clientX - rect.left, e.clientY - rect.top);
-    showSpeech("Mera paw mat chhoo! Hehe 🐾", 1800);
+  bubble.addEventListener('click', () => {
+    SoundFX.splash();
+    bubble.remove();
+    bubblesList = bubblesList.filter(b => b !== bubble);
   });
 }
-setupTouchReactions();
 
-// --- FEEDING TOM (KITCHEN) ---
-function feedTom(foodType) {
-  initAudio();
-  if (state.isSleeping) {
-    wakeUpTom();
-    return;
+function washSoapBubbles(x, y) {
+  if (bubblesList.length > 0) {
+    SoundFX.splash();
+    vibrate(20);
+    bubblesList.forEach(b => {
+      b.style.transition = 'transform 0.3s, opacity 0.3s';
+      b.style.transform = 'translateY(80px) scale(0)';
+      b.style.opacity = '0';
+      setTimeout(() => b.remove(), 300);
+    });
+    bubblesList = [];
+
+    State.hygiene = Math.min(100, State.hygiene + 25);
+    addXP(10);
+    updateHUD();
+    spawnFloatingText(characterStage.offsetLeft + 160, characterStage.offsetTop + 120, '✨ CHAKACHAK! ✨', '#06b6d4');
+    showSpeechBubble('Shabaash! Tom ekdum saaf aur chamakdar ho gaya! 🛁✨');
   }
-  if (state.isChewing) return;
+}
 
-  state.isChewing = true;
-  setMouthOpen(true);
-  el.tomSvg.classList.add('anim-chew');
+// --- Bedroom: Sleep System ---
+const bedLamp = document.getElementById('bed-lamp');
+const darkOverlay = document.getElementById('bedroom-dark-overlay');
+let snoreTimer = null;
 
-  const foodData = {
-    milk: { name: "Doodh", emoji: "🥛", hungerGain: 25, isSpicy: false, speech: "Mmm! Taza Doodh bohot mast tha! 🥛😋" },
-    fish: { name: "Machhli", emoji: "🐟", hungerGain: 35, isSpicy: false, speech: "Waah! Lazeez machhli, maza aa gaya! 🐟✨" },
-    cake: { name: "Cake", emoji: "🧁", hungerGain: 30, isSpicy: false, speech: "Mitha Cake! Mmm tasty! 🧁🎉" },
-    chili: { name: "Mirchi", emoji: "🌶️", hungerGain: 10, isSpicy: true, speech: "BAAP RE! BOHOT TEEKHI MIRCHI HAI! 🔥🌶️" },
-    watermelon: { name: "Tarbooz", emoji: "🍉", hungerGain: 20, isSpicy: false, speech: "Thanda meetha tarbooz! 🍉" }
+function toggleLamp() {
+  State.isSleeping = !State.isSleeping;
+  vibrate(30);
+  SoundFX.boing();
+
+  if (State.isSleeping) {
+    bedLamp.classList.add('lamp-off');
+    darkOverlay.classList.add('sleep-mode');
+    setEyesClosed(true);
+    showSpeechBubble('Shhh... Tom so raha hai! 😴💤');
+
+    snoreTimer = setInterval(() => {
+      if (!State.isSleeping) return;
+      SoundFX.snore();
+      spawnFloatingZzz();
+      State.energy = Math.min(100, State.energy + 5);
+      updateHUD();
+      if (State.energy >= 100) {
+        showSpeechBubble('Tom ki neend poori ho gayi! Energy 100%! ⚡');
+      }
+    }, 2800);
+  } else {
+    bedLamp.classList.remove('lamp-off');
+    darkOverlay.classList.remove('sleep-mode');
+    setEyesClosed(false);
+    clearInterval(snoreTimer);
+    showSpeechBubble('Good Morning! Tom uth gaya! 🌞😺');
+    SoundFX.meow(540);
+  }
+}
+
+if (bedLamp) bedLamp.addEventListener('click', toggleLamp);
+
+function spawnFloatingZzz() {
+  const el = document.createElement('div');
+  el.className = 'floating-zzz';
+  el.innerText = 'Zzz...';
+  el.style.left = `${characterStage.offsetLeft + 200}px`;
+  el.style.top = `${characterStage.offsetTop + 100}px`;
+  fxContainer.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+// --- Props (Punching Bag & Ball) ---
+const punchingBag = document.getElementById('punching-bag');
+if (punchingBag) {
+  punchingBag.addEventListener('click', () => {
+    vibrate(40);
+    SoundFX.slap();
+    punchingBag.style.transform = 'rotate(-30deg)';
+    setTimeout(() => {
+      punchingBag.style.transform = 'rotate(20deg)';
+      setTimeout(() => {
+        punchingBag.style.transform = 'rotate(-10deg)';
+        setTimeout(() => { punchingBag.style.transform = ''; }, 200);
+      }, 200);
+    }, 200);
+    showSpeechBubble('Dhooom! Zabardast Punch! 🥊');
+    State.happy = Math.min(100, State.happy + 5);
+    updateHUD();
+  });
+}
+
+const ballProp = document.getElementById('ball-prop');
+if (ballProp) {
+  ballProp.addEventListener('click', () => {
+    vibrate(30);
+    SoundFX.boing();
+    ballProp.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+    ballProp.style.transform = 'translateY(-140px) scale(1.15)';
+    setTimeout(() => {
+      ballProp.style.transform = 'translateY(0) scale(1)';
+    }, 400);
+    State.happy = Math.min(100, State.happy + 4);
+    updateHUD();
+  });
+}
+
+// --- Talking Tom Speech Engine ---
+let recognition = null;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'hi-IN';
+
+  recognition.onstart = () => {
+    micBtn.classList.add('listening');
+    showSpeechBubble('Sun raha hu... bolo kuch! 👂🎙️');
   };
 
-  const item = foodData[foodType];
-  const rect = el.scene.getBoundingClientRect();
-  spawnFX(item.emoji, rect.width / 2, rect.height * 0.4);
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript;
+    micBtn.classList.remove('listening');
+    speakLikeTom(text);
+  };
 
-  let chews = 0;
-  const chewInterval = setInterval(() => {
-    chews++;
-    SFX.chew();
-    if (chews >= 4) {
-      clearInterval(chewInterval);
-      setMouthOpen(false);
-      el.tomSvg.classList.remove('anim-chew');
-      state.isChewing = false;
+  recognition.onerror = () => {
+    micBtn.classList.remove('listening');
+    showSpeechBubble('Aawaz theek se nahi suni! Dobara bolo.');
+  };
 
-      if (item.isSpicy) {
-        SFX.spicy();
-        el.tomSvg.classList.add('anim-slap');
-        spawnFX('🔥', rect.width / 2, rect.height * 0.35);
-        spawnFX('🔥', rect.width / 2 - 30, rect.height * 0.35);
-        spawnFX('🔥', rect.width / 2 + 30, rect.height * 0.35);
-        showSpeech(item.speech, 3500);
-        setTimeout(() => el.tomSvg.classList.remove('anim-slap'), 1200);
-      } else {
-        SFX.purr();
-        state.hunger = Math.min(100, state.hunger + item.hungerGain);
-        state.fun = Math.min(100, state.fun + 10);
-        state.coins += 5;
-        SFX.coin();
-        updateStatusBars();
-        showSpeech(item.speech, 2500);
-      }
+  recognition.onend = () => {
+    micBtn.classList.remove('listening');
+  };
+}
+
+function startListening() {
+  if (State.isSpeaking) return;
+  initAudio();
+  if (recognition) {
+    try {
+      recognition.start();
+    } catch (e) {
+      recognition.stop();
     }
-  }, 240);
-}
-
-document.querySelectorAll('.food-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const food = btn.getAttribute('data-food');
-    feedTom(food);
-  });
-});
-
-// --- BATHROOM SYSTEM (NAHANA) ---
-let soapBubblesCount = 0;
-
-function applySoap() {
-  initAudio();
-  SFX.bubblePop();
-  soapBubblesCount++;
-
-  const bubble = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  const cx = 130 + Math.random() * 140;
-  const cy = 200 + Math.random() * 220;
-  const r = 8 + Math.random() * 14;
-
-  bubble.setAttribute('cx', cx);
-  bubble.setAttribute('cy', cy);
-  bubble.setAttribute('r', r);
-  bubble.setAttribute('fill', 'rgba(255, 255, 255, 0.75)');
-  bubble.setAttribute('stroke', '#81d4fa');
-  bubble.setAttribute('stroke-width', '2');
-  bubble.setAttribute('class', 'soap-bubble-item');
-
-  el.soapLayer.appendChild(bubble);
-
-  const rect = el.scene.getBoundingClientRect();
-  spawnFX('🫧', rect.width / 2 + (Math.random() * 80 - 40), rect.height * 0.5);
-
-  if (soapBubblesCount >= 6) {
-    showSpeech("Sabun lag gaya! Ab Shower se dho do! 🚿", 2500);
-  }
-}
-
-function showerTom() {
-  initAudio();
-  SFX.splash();
-  const rect = el.scene.getBoundingClientRect();
-
-  const bubbles = el.soapLayer.querySelectorAll('.soap-bubble-item');
-  bubbles.forEach((b, i) => {
-    setTimeout(() => {
-      SFX.bubblePop();
-      b.remove();
-    }, i * 60);
-  });
-  soapBubblesCount = 0;
-
-  for (let i = 0; i < 5; i++) {
-    setTimeout(() => {
-      spawnFX('💦', rect.width / 2 + (Math.random() * 90 - 45), rect.height * 0.35 + i * 15);
-      spawnFX('✨', rect.width / 2 + (Math.random() * 90 - 45), rect.height * 0.45);
-    }, i * 120);
-  }
-
-  state.hygiene = 100;
-  state.fun = Math.min(100, state.fun + 15);
-  state.coins += 10;
-  SFX.coin();
-  updateStatusBars();
-  showSpeech("Aah! Ekdum chaka chak saaf ho gaya! ✨🛁", 3000);
-}
-
-function toiletTom() {
-  initAudio();
-  SFX.flush();
-  showSpeech("Shh... Tom toilet use kar raha hai! 🚽", 2500);
-  setTimeout(() => {
-    state.hygiene = Math.min(100, state.hygiene + 20);
-    state.fun = Math.min(100, state.fun + 10);
-    updateStatusBars();
-    showSpeech("Flushed! Pet halka ho gaya! 💨😂", 2500);
-  }, 1200);
-}
-
-document.getElementById('btn-soap').addEventListener('click', applySoap);
-document.getElementById('btn-shower').addEventListener('click', showerTom);
-document.getElementById('btn-potty').addEventListener('click', toiletTom);
-
-// --- BEDROOM SYSTEM (SLEEPING & LIGHTS) ---
-function toggleSleep() {
-  initAudio();
-  state.isSleeping = !state.isSleeping;
-
-  if (state.isSleeping) {
-    el.nightOverlay.classList.remove('hidden');
-    el.sleepZzz.classList.remove('hidden');
-    el.accNightcap.classList.remove('hidden');
-    el.eyelidLeft.setAttribute('stroke-width', '40');
-    el.eyelidRight.setAttribute('stroke-width', '40');
-    el.lampLabel.textContent = "Batti Jalayein 💡";
-    showSpeech("Shh... Tom so raha hai... Zzz 😴", 2500);
-
-    window.sleepInterval = setInterval(() => {
-      if (state.isSleeping) {
-        state.energy = Math.min(100, state.energy + 8);
-        updateStatusBars();
-        if (state.energy >= 100) {
-          showSpeech("Tom ki neend poori ho gayi! Jagao ise! ☀️", 3000);
-        }
-      }
-    }, 1500);
   } else {
-    wakeUpTom();
+    openTalkModal();
   }
 }
 
-function wakeUpTom() {
-  if (!state.isSleeping) return;
-  state.isSleeping = false;
-  clearInterval(window.sleepInterval);
-  el.nightOverlay.classList.add('hidden');
-  el.sleepZzz.classList.add('hidden');
-  el.accNightcap.classList.add('hidden');
-  el.eyelidLeft.setAttribute('stroke-width', '0');
-  el.eyelidRight.setAttribute('stroke-width', '0');
-  el.lampLabel.textContent = "Batti Band Karo 💡";
-  SFX.meow(1.1);
-  showSpeech("Good Morning! Main jag gaya! 😸☀️", 2500);
+if (micBtn) {
+  micBtn.addEventListener('click', startListening);
 }
 
-el.btnLamp.addEventListener('click', toggleSleep);
-
-// --- WARDROBE SYSTEM ---
-function toggleAccessory(accName) {
+function speakLikeTom(text) {
+  if (!text) return;
   initAudio();
-  state.activeAccessories[accName] = !state.activeAccessories[accName];
-  const isNowActive = state.activeAccessories[accName];
-
-  if (accName === 'hat') {
-    el.accHat.classList.toggle('hidden', !isNowActive);
-  } else if (accName === 'sunglasses') {
-    el.accSunglasses.classList.toggle('hidden', !isNowActive);
-  } else if (accName === 'bowtie') {
-    el.accBowtie.classList.toggle('hidden', !isNowActive);
-  }
-
-  SFX.coin();
-  showSpeech(isNowActive ? "Dekho mera naya style! 😎✨" : "Style reset!", 1800);
-}
-
-document.querySelectorAll('.wardrobe-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const acc = btn.getAttribute('data-acc');
-    toggleAccessory(acc);
-  });
-});
-
-// --- ROOM NAVIGATION ---
-function switchRoom(roomName) {
-  initAudio();
-  state.currentRoom = roomName;
-
-  el.navTabs.forEach(tab => {
-    tab.classList.toggle('active', tab.getAttribute('data-room') === roomName);
-  });
-
-  el.kitchenDrawer.classList.add('hidden');
-  el.bathDrawer.classList.add('hidden');
-  el.bedroomControls.classList.add('hidden');
-  el.wardrobeDrawer.classList.add('hidden');
-  el.talkInputDrawer.classList.add('hidden');
-
-  el.scene.className = `room-${roomName}`;
-
-  if (roomName === 'living') {
-    showSpeech("Mere pyare ghar mein swagat hai! 🛋️❤️", 2000);
-  } else if (roomName === 'kitchen') {
-    el.kitchenDrawer.classList.remove('hidden');
-    showSpeech("Bhookh lagi hai! Kuch khilao na! 🍽️😋", 2500);
-  } else if (roomName === 'bath') {
-    el.bathDrawer.classList.remove('hidden');
-    showSpeech("Chalo nahane chalein! 🛁🧼", 2000);
-  } else if (roomName === 'bedroom') {
-    el.bedroomControls.classList.remove('hidden');
-    showSpeech("Thak gaya hoon! Sone ka waqt? 🛏️😴", 2000);
-  } else if (roomName === 'game') {
-    openMiniGame();
-  }
-}
-
-el.navTabs.forEach(tab => {
-  tab.addEventListener('click', () => {
-    const room = tab.getAttribute('data-room');
-    if (room) switchRoom(room);
-  });
-});
-
-el.btnWardrobeToggle.addEventListener('click', () => {
-  initAudio();
-  el.wardrobeDrawer.classList.toggle('hidden');
-});
-
-// --- CORE TALKING TOM FEATURE: MIC RECORDING & HELIUM PITCH SHIFT ---
-let mediaRecorder = null;
-let audioChunks = [];
-let micStream = null;
-
-async function startMicRecording() {
-  initAudio();
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(micStream);
-    audioChunks = [];
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      playBackWithPitchShift(audioBlob);
-    };
-
-    mediaRecorder.start();
-    state.isRecording = true;
-    el.btnMicToggle.classList.add('recording');
-    el.micStatusBox.classList.remove('hidden');
-    el.micLabel.textContent = "Tom Sun Raha Hai... Bolo! 🎤";
-    showSpeech("Main dhyan se sun raha hoon... 👂", 2000);
-
-    setTimeout(() => {
-      if (state.isRecording) {
-        stopMicRecording();
-      }
-    }, 4500);
-
-  } catch (err) {
-    console.warn("Microphone access unavailable or denied:", err);
-    el.talkInputDrawer.classList.toggle('hidden');
-    showSpeech("Mic permission nahi mili! Yahan likh kar bolo 💬", 3000);
-  }
-}
-
-function stopMicRecording() {
-  if (mediaRecorder && state.isRecording) {
-    mediaRecorder.stop();
-    if (micStream) {
-      micStream.getTracks().forEach(track => track.stop());
-    }
-  }
-  state.isRecording = false;
-  el.btnMicToggle.classList.remove('recording');
-  el.micStatusBox.classList.add('hidden');
-}
-
-async function playBackWithPitchShift(audioBlob) {
-  initAudio();
-  if (!audioCtx) return;
-
-  const arrayBuffer = await audioBlob.arrayBuffer();
-  try {
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    const source = audioCtx.createBufferSource();
-    source.buffer = audioBuffer;
-
-    // Helium Cat Voice: 1.45x playback rate
-    source.playbackRate.value = 1.45;
-
-    source.connect(audioCtx.destination);
-    source.start();
-
-    state.isSpeaking = true;
-    const mouthInterval = setInterval(() => {
-      setMouthOpen(Math.random() > 0.4);
-    }, 120);
-
-    const playDuration = (audioBuffer.duration / 1.45) * 1000;
-    showSpeech("Hehe! Maine sun liya! 🗣️😸", playDuration);
-
-    setTimeout(() => {
-      clearInterval(mouthInterval);
-      setMouthOpen(false);
-      state.isSpeaking = false;
-    }, playDuration + 100);
-
-  } catch (err) {
-    console.error("Audio decode error:", err);
-    tomSpeakFallback("Meow! Maine aapki awaz suni!");
-  }
-}
-
-// Fallback Speech Synthesis
-function tomSpeakFallback(text) {
-  initAudio();
-  showSpeech(text, 3500);
+  showSpeechBubble(text, 5000);
 
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.pitch = 1.85; // High pitch helium voice
-    utterance.rate = 1.25;  // Fast cute cat rate
-    utterance.lang = 'hi-IN';
+    utterance.pitch = 1.85; // High Pitch helium voice
+    utterance.rate = 1.15;
 
-    state.isSpeaking = true;
+    const voices = window.speechSynthesis.getVoices();
+    const cuteVoice = voices.find(v => v.lang.includes('hi') || v.name.includes('Google') || v.name.includes('Natural'));
+    if (cuteVoice) utterance.voice = cuteVoice;
+
+    State.isSpeaking = true;
+
     const mouthInterval = setInterval(() => {
-      setMouthOpen(Math.random() > 0.35);
-    }, 130);
+      if (!State.isSpeaking) {
+        clearInterval(mouthInterval);
+        setCatMouth(false);
+        return;
+      }
+      setCatMouth(Math.random() > 0.4);
+    }, 120);
 
     utterance.onend = () => {
+      State.isSpeaking = false;
       clearInterval(mouthInterval);
-      setMouthOpen(false);
-      state.isSpeaking = false;
+      setCatMouth(false);
     };
+
     utterance.onerror = () => {
+      State.isSpeaking = false;
       clearInterval(mouthInterval);
-      setMouthOpen(false);
-      state.isSpeaking = false;
+      setCatMouth(false);
     };
 
     window.speechSynthesis.speak(utterance);
   } else {
-    SFX.meow(1.4);
-    setMouthOpen(true);
-    setTimeout(() => setMouthOpen(false), 800);
+    SoundFX.meow(650);
+    setTimeout(() => SoundFX.meow(550), 300);
   }
 }
 
-el.btnMicToggle.addEventListener('click', () => {
-  if (state.isRecording) {
-    stopMicRecording();
-  } else {
-    startMicRecording();
-  }
-});
+// --- Talk Modal ---
+const talkModal = document.getElementById('talk-modal');
+const talkInput = document.getElementById('talk-input');
+const btnSendTalk = document.getElementById('btn-send-talk');
 
-// Quick talk input events
-el.btnSendTalk.addEventListener('click', () => {
-  const text = el.talkTextInput.value.trim();
-  if (text) {
-    tomSpeakFallback(text);
-    el.talkTextInput.value = '';
-  }
-});
+function openTalkModal() {
+  talkModal.classList.add('open');
+}
+
+function closeTalkModal() {
+  talkModal.classList.remove('open');
+}
+
+if (btnSendTalk) {
+  btnSendTalk.addEventListener('click', () => {
+    const val = talkInput.value.trim();
+    if (val) {
+      closeTalkModal();
+      speakLikeTom(val);
+      talkInput.value = '';
+    }
+  });
+}
 
 document.querySelectorAll('.phrase-chip').forEach(chip => {
   chip.addEventListener('click', () => {
-    const phrase = chip.getAttribute('data-phrase');
-    tomSpeakFallback(phrase);
+    closeTalkModal();
+    speakLikeTom(chip.innerText);
   });
 });
 
-// --- MINI-GAME: MACHHLI PAKDO ---
-let gameLoopId = null;
-let gameScore = 0;
-let gameCoinsEarned = 0;
-let playerX = 140;
-let items = [];
-let gameRunning = false;
+// --- Wardrobe ---
+const wardrobeModal = document.getElementById('wardrobe-modal');
+const btnOpenWardrobe = document.getElementById('btn-open-wardrobe');
 
-function openMiniGame() {
-  el.miniGameModal.classList.remove('hidden');
-  startMiniGame();
+if (btnOpenWardrobe) {
+  btnOpenWardrobe.addEventListener('click', () => {
+    wardrobeModal.classList.add('open');
+  });
 }
 
-function closeMiniGame() {
-  gameRunning = false;
-  if (gameLoopId) cancelAnimationFrame(gameLoopId);
-  el.miniGameModal.classList.add('hidden');
-  state.coins += gameCoinsEarned;
-  state.fun = Math.min(100, state.fun + 25);
-  updateStatusBars();
-  switchRoom('living');
+function equipHat(hatType) {
+  State.hat = hatType;
+  document.getElementById('hat-party').style.display = hatType === 'party' ? 'block' : 'none';
+  document.getElementById('hat-wizard').style.display = hatType === 'wizard' ? 'block' : 'none';
+  document.getElementById('hat-crown').style.display = hatType === 'crown' ? 'block' : 'none';
+  SoundFX.coin();
+  saveProgress();
 }
 
-el.btnCloseGame.addEventListener('click', closeMiniGame);
+function equipGlasses(glassesType) {
+  State.glasses = glassesType;
+  document.getElementById('glasses-cool').style.display = glassesType === 'cool' ? 'block' : 'none';
+  SoundFX.coin();
+  saveProgress();
+}
+
+function equipFur(furType) {
+  State.fur = furType;
+  const colors = {
+    grey: { base: '#8c9ba5', shadow: '#6c7982', belly: '#e2e8f0' },
+    orange: { base: '#f97316', shadow: '#c2410c', belly: '#ffedd5' },
+    black: { base: '#334155', shadow: '#1e293b', belly: '#64748b' },
+    white: { base: '#f8fafc', shadow: '#cbd5e1', belly: '#ffffff' }
+  };
+  const c = colors[furType] || colors.grey;
+  document.documentElement.style.setProperty('--fur-color', c.base);
+  document.documentElement.style.setProperty('--fur-shadow', c.shadow);
+  document.documentElement.style.setProperty('--fur-belly', c.belly);
+  SoundFX.coin();
+  saveProgress();
+}
+
+function equipAccessory(accType) {
+  State.accessory = accType;
+  document.getElementById('acc-bowtie').style.display = accType === 'bowtie' ? 'block' : 'none';
+  SoundFX.coin();
+  saveProgress();
+}
+
+document.querySelectorAll('.wardrobe-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const type = item.dataset.type;
+    const value = item.dataset.value;
+    if (type === 'hat') equipHat(value);
+    if (type === 'glasses') equipGlasses(value);
+    if (type === 'fur') equipFur(value);
+    if (type === 'accessory') equipAccessory(value);
+
+    item.parentElement.querySelectorAll('.wardrobe-item').forEach(el => el.classList.remove('equipped'));
+    item.classList.add('equipped');
+  });
+});
+
+document.querySelectorAll('.btn-close').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.closest('.modal-overlay').classList.remove('open');
+  });
+});
+
+// --- Mini Game: Canvas Arcade ---
+const minigameModal = document.getElementById('minigame-modal');
+const btnOpenGame = document.getElementById('btn-open-game');
+const canvas = document.getElementById('minigame-canvas');
+const ctx = canvas.getContext('2d');
+const scoreDisplay = document.getElementById('mg-score');
+const livesDisplay = document.getElementById('mg-lives');
+const btnStartGame = document.getElementById('btn-start-mg');
+
+let mgLoop = null;
+let mgScore = 0;
+let mgLives = 3;
+let mgBasketX = 140;
+let mgItems = [];
+let mgIsRunning = false;
+
+if (btnOpenGame) {
+  btnOpenGame.addEventListener('click', () => {
+    minigameModal.classList.add('open');
+  });
+}
 
 function startMiniGame() {
-  gameScore = 0;
-  gameCoinsEarned = 0;
-  playerX = 140;
-  items = [];
-  gameRunning = true;
-  el.gameScoreDisplay.textContent = `Score: 0 | 🪙 0`;
+  mgScore = 0;
+  mgLives = 3;
+  mgItems = [];
+  mgBasketX = canvas.width / 2 - 25;
+  mgIsRunning = true;
+  btnStartGame.style.display = 'none';
+  scoreDisplay.innerText = `Score: 0`;
+  livesDisplay.innerText = `❤️ ❤️ ❤️`;
 
-  const canvas = el.canvas;
-  const ctx = canvas.getContext('2d');
+  if (mgLoop) cancelAnimationFrame(mgLoop);
+  runMiniGameLoop();
+}
 
-  let lastSpawn = Date.now();
+btnStartGame.addEventListener('click', startMiniGame);
 
-  function spawnGameItem() {
-    const types = [
-      { type: 'fish', emoji: '🐟', score: 10, speed: 2.8, isBomb: false },
-      { type: 'coin', emoji: '🪙', score: 5, speed: 3.2, isBomb: false, coin: 2 },
-      { type: 'milk', emoji: '🥛', score: 15, speed: 2.5, isBomb: false },
-      { type: 'bomb', emoji: '💣', score: -20, speed: 3.5, isBomb: true }
-    ];
-    const rand = Math.random();
-    let selected = types[0];
-    if (rand < 0.35) selected = types[0];
-    else if (rand < 0.65) selected = types[1];
-    else if (rand < 0.85) selected = types[2];
-    else selected = types[3];
+canvas.addEventListener('pointermove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scale = canvas.width / rect.width;
+  mgBasketX = (e.clientX - rect.left) * scale - 25;
+  mgBasketX = Math.max(0, Math.min(canvas.width - 50, mgBasketX));
+});
 
-    items.push({
-      x: 25 + Math.random() * (canvas.width - 50),
-      y: -25,
-      ...selected
+function runMiniGameLoop() {
+  if (!mgIsRunning) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (Math.random() < 0.04) {
+    const isBomb = Math.random() < 0.25;
+    const isCoin = !isBomb && Math.random() < 0.3;
+    mgItems.push({
+      x: Math.random() * (canvas.width - 30) + 10,
+      y: -20,
+      speed: Math.random() * 2.5 + 2.5,
+      type: isBomb ? 'bomb' : (isCoin ? 'coin' : 'fish'),
+      emoji: isBomb ? '💣' : (isCoin ? '🪙' : '🐟')
     });
   }
 
-  function loop() {
-    if (!gameRunning) return;
+  // Draw Basket
+  ctx.fillStyle = '#f59e0b';
+  ctx.beginPath();
+  ctx.arc(mgBasketX + 25, canvas.height - 20, 25, 0, Math.PI, false);
+  ctx.fill();
+  ctx.fillStyle = '#1e293b';
+  ctx.font = '20px sans-serif';
+  ctx.fillText('🐱', mgBasketX + 15, canvas.height - 22);
 
-    ctx.fillStyle = '#0288d1';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1;
-    for (let y = 0; y < canvas.height; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
-
-    if (Date.now() - lastSpawn > 800) {
-      spawnGameItem();
-      lastSpawn = Date.now();
-    }
-
-    for (let i = items.length - 1; i >= 0; i--) {
-      const it = items[i];
-      it.y += it.speed;
-
-      ctx.font = '26px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(it.emoji, it.x, it.y);
-
-      if (it.y >= canvas.height - 45 && it.y <= canvas.height - 15) {
-        if (Math.abs(it.x - playerX) < 40) {
-          if (it.isBomb) {
-            SFX.bonk();
-            gameScore = Math.max(0, gameScore - 20);
-          } else {
-            SFX.bubblePop();
-            gameScore += it.score;
-            if (it.coin) {
-              SFX.coin();
-              gameCoinsEarned += it.coin;
-            }
-          }
-          el.gameScoreDisplay.textContent = `Score: ${gameScore} | 🪙 ${gameCoinsEarned}`;
-          items.splice(i, 1);
-          continue;
-        }
-      }
-
-      if (it.y > canvas.height + 30) {
-        items.splice(i, 1);
-      }
-    }
-
-    const basketY = canvas.height - 35;
-    ctx.fillStyle = '#ff9800';
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(playerX - 35, basketY, 70, 24, [0, 0, 12, 12]);
-    } else {
-      ctx.rect(playerX - 35, basketY, 70, 24);
-    }
-    ctx.fill();
-    ctx.fillStyle = '#e65100';
-    ctx.fillRect(playerX - 35, basketY, 70, 5);
+  // Update & Draw Items
+  for (let i = mgItems.length - 1; i >= 0; i--) {
+    const item = mgItems[i];
+    item.y += item.speed;
 
     ctx.font = '24px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('🐱', playerX, basketY + 18);
+    ctx.fillText(item.emoji, item.x - 12, item.y);
 
-    gameLoopId = requestAnimationFrame(loop);
-  }
+    if (item.y >= canvas.height - 45 && item.y <= canvas.height - 15) {
+      if (item.x >= mgBasketX - 10 && item.x <= mgBasketX + 55) {
+        if (item.type === 'bomb') {
+          vibrate(50);
+          SoundFX.slap();
+          mgLives--;
+          livesDisplay.innerText = '❤️ '.repeat(Math.max(0, mgLives));
+          if (mgLives <= 0) {
+            endMiniGame();
+            return;
+          }
+        } else if (item.type === 'coin') {
+          SoundFX.coin();
+          mgScore += 25;
+          addCoins(2);
+        } else {
+          SoundFX.crunch();
+          mgScore += 10;
+        }
+        scoreDisplay.innerText = `Score: ${mgScore}`;
+        mgItems.splice(i, 1);
+        continue;
+      }
+    }
 
-  function setPlayerPos(clientX) {
-    const rect = canvas.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * canvas.width;
-    playerX = Math.max(40, Math.min(canvas.width - 40, x));
-  }
-
-  canvas.onpointermove = (e) => setPlayerPos(e.clientX);
-  canvas.ontouchmove = (e) => {
-    if (e.touches[0]) setPlayerPos(e.touches[0].clientX);
-  };
-
-  el.btnMoveLeft.onclick = () => { playerX = Math.max(40, playerX - 35); };
-  el.btnMoveRight.onclick = () => { playerX = Math.min(canvas.width - 40, playerX + 35); };
-
-  loop();
-}
-
-// --- STAT DECAY TIMER ---
-setInterval(() => {
-  if (!state.isSleeping) {
-    state.hunger = Math.max(0, state.hunger - 1);
-    state.fun = Math.max(0, state.fun - 1);
-    state.energy = Math.max(0, state.energy - 1);
-    state.hygiene = Math.max(0, state.hygiene - 1);
-    updateStatusBars();
-
-    if (state.hunger <= 20 && Math.random() < 0.25) {
-      showSpeech("Mujhe bhookh lagi hai! Rasoi mein le chalo 🍽️🥺", 3000);
-      SFX.meow(0.9);
+    if (item.y > canvas.height + 20) {
+      mgItems.splice(i, 1);
     }
   }
-}, 7000);
 
-// --- INITIALIZE GAME ---
+  mgLoop = requestAnimationFrame(runMiniGameLoop);
+}
+
+function endMiniGame() {
+  mgIsRunning = false;
+  cancelAnimationFrame(mgLoop);
+  SoundFX.meow(320);
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('KHEL KHATAM!', canvas.width / 2, canvas.height / 2 - 10);
+  ctx.font = '16px sans-serif';
+  ctx.fillText(`Final Score: ${mgScore} Pts`, canvas.width / 2, canvas.height / 2 + 20);
+  btnStartGame.style.display = 'block';
+  btnStartGame.innerText = 'Dobara Khelo 🎮';
+  addCoins(Math.floor(mgScore / 10));
+}
+
+// --- Persistence ---
+function saveProgress() {
+  try {
+    localStorage.setItem('talking_tom_state', JSON.stringify({
+      coins: State.coins,
+      level: State.level,
+      xp: State.xp,
+      hunger: State.hunger,
+      hygiene: State.hygiene,
+      energy: State.energy,
+      happy: State.happy,
+      hat: State.hat,
+      glasses: State.glasses,
+      fur: State.fur,
+      accessory: State.accessory
+    }));
+  } catch (e) {}
+}
+
+function loadProgress() {
+  try {
+    const saved = localStorage.getItem('talking_tom_state');
+    if (saved) {
+      const data = JSON.parse(saved);
+      Object.assign(State, data);
+      equipHat(State.hat);
+      equipGlasses(State.glasses);
+      equipFur(State.fur);
+      equipAccessory(State.accessory);
+    }
+  } catch (e) {}
+}
+
+setInterval(() => {
+  if (!State.isSleeping) {
+    State.hunger = Math.max(0, State.hunger - 0.5);
+    State.hygiene = Math.max(0, State.hygiene - 0.4);
+    State.energy = Math.max(0, State.energy - 0.6);
+    State.happy = Math.max(0, State.happy - 0.5);
+    updateHUD();
+  }
+}, 8000);
+
+// --- Initialization ---
 window.addEventListener('DOMContentLoaded', () => {
-  updateStatusBars();
-  showSpeech("Namaste! Main hoon Tom! Mujhse khelo! 😸🎉", 3500);
-
-  window.addEventListener('click', () => initAudio(), { once: true });
-  window.addEventListener('touchstart', () => initAudio(), { once: true });
+  loadProgress();
+  updateHUD();
+  switchRoom('living');
+  showSpeechBubble('Namaste dost! Mai hu Tom! 😸❤️');
 });
