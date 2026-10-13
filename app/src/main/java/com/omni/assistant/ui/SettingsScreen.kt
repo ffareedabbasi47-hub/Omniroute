@@ -103,11 +103,11 @@ fun SettingsScreen(
                                 Icon(Icons.Default.Refresh, contentDescription = "Check connection")
                             }
                         }
-                        val statusText = when (conn) {
+                        val statusText = when (val c = conn) {
                             is ConnState.Ok -> "Connected to Antigravity"
                             ConnState.Checking -> "Connecting to local bridge..."
-                            is ConnState.Unverified -> conn.message
-                            is ConnState.Failed -> "Bridge not running: ${conn.message}"
+                            is ConnState.Unverified -> c.message
+                            is ConnState.Failed -> "Bridge not running: ${c.message}"
                             ConnState.Unknown -> "Tap check to test connection"
                         }
                         val statusColor = when (conn) {
