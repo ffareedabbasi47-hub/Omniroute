@@ -204,19 +204,23 @@ fun ChatScreen(
         try {
             camera.launch(uri)
         } catch (_: Exception) {
+            val captureIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                clipData = ClipData.newRawUri("camera_capture", uri)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             try {
-                val captureIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
-                    putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
-                    clipData = ClipData.newRawUri("camera_capture", uri)
-                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                fallbackCamera.launch(Intent.createChooser(captureIntent, "Take Photo"))
+                fallbackCamera.launch(captureIntent)
             } catch (_: Exception) {
                 try {
-                    val stillIntent = Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
-                    ctx.startActivity(stillIntent)
+                    fallbackCamera.launch(Intent.createChooser(captureIntent, "Take Photo"))
                 } catch (_: Exception) {
-                    vm.notify("No camera app is available on this device.")
+                    try {
+                        val stillIntent = Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+                        ctx.startActivity(stillIntent)
+                    } catch (_: Exception) {
+                        vm.notify("No camera app is available on this device.")
+                    }
                 }
             }
         }

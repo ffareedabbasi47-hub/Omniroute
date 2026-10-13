@@ -190,33 +190,14 @@ object FileExport {
         val stageSummary: String
     )
 
-    data class ThinkingSplit(
-        val thinking: String?,
-        val cleanText: String
-    )
+    typealias ThinkingSplit = AttachmentRules.ThinkingSplit
 
     /**
      * Splits raw LLM response into thinking content and the clean user-facing response.
      * Supports <thinking>...</thinking> as well as unclosed <thinking> while streaming.
      */
-    fun splitThinking(markdown: String): ThinkingSplit {
-        if (!markdown.contains("<thinking>")) {
-            return ThinkingSplit(null, markdown)
-        }
-        val start = markdown.indexOf("<thinking>")
-        val end = markdown.indexOf("</thinking>")
-        return if (end != -1) {
-            val thinking = markdown.substring(start + 10, end).trim()
-            val before = markdown.substring(0, start)
-            val after = markdown.substring(end + 11)
-            val clean = (before + after).trimStart('\r', '\n')
-            ThinkingSplit(thinking.ifBlank { null }, clean)
-        } else {
-            val thinking = markdown.substring(start + 10).trim()
-            val clean = markdown.substring(0, start).trimStart('\r', '\n')
-            ThinkingSplit(thinking.ifBlank { null }, clean)
-        }
-    }
+    fun splitThinking(markdown: String): AttachmentRules.ThinkingSplit =
+        AttachmentRules.splitThinking(markdown)
 
     /** Extracts live progress from streamed markdown in real-time. */
     fun parseStreamingProgress(markdown: String): StreamingLiveState {

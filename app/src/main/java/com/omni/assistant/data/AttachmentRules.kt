@@ -70,4 +70,32 @@ object AttachmentRules {
     /** Midpoint timestamps (microseconds) of n equal slices of the video. */
     fun frameTimesUs(durationMs: Long, n: Int): List<Long> =
         (0 until n).map { i -> durationMs * 1000L * (2 * i + 1) / (2L * n) }
+
+    data class ThinkingSplit(
+        val thinking: String?,
+        val cleanText: String
+    )
+
+    /**
+     * Splits raw LLM response into thinking content and the clean user-facing response.
+     * Supports <thinking>...</thinking> as well as unclosed <thinking> while streaming.
+     */
+    fun splitThinking(markdown: String): ThinkingSplit {
+        if (!markdown.contains("<thinking>")) {
+            return ThinkingSplit(null, markdown)
+        }
+        val start = markdown.indexOf("<thinking>")
+        val end = markdown.indexOf("</thinking>")
+        return if (end != -1) {
+            val thinking = markdown.substring(start + 10, end).trim()
+            val before = markdown.substring(0, start)
+            val after = markdown.substring(end + 11)
+            val clean = (before + after).trimStart('\r', '\n')
+            ThinkingSplit(thinking.ifBlank { null }, clean)
+        } else {
+            val thinking = markdown.substring(start + 10).trim()
+            val clean = markdown.substring(0, start).trimStart('\r', '\n')
+            ThinkingSplit(thinking.ifBlank { null }, clean)
+        }
+    }
 }
