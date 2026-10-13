@@ -385,17 +385,23 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun runGeneration(cid: Long) {
-        _ui.update { it.copy(streaming = true, partial = "", status = "🧠 Thinking & planning...", error = null) }
+        _ui.update { it.copy(streaming = true, partial = "", status = "🧠 Thinking & planning project...", error = null) }
         val sb = StringBuilder()
         var hadParts = false
+        var lastEmitTime = 0L
         try {
             val (history, anyParts) = buildHistory(cid)
             hadParts = anyParts
             omni.client.streamChat(history).collect { chunk ->
                 sb.append(chunk)
-                val currentText = sb.toString()
-                val liveStatus = extractLiveStatus(currentText)
-                _ui.update { it.copy(partial = currentText, status = liveStatus) }
+                val now = System.currentTimeMillis()
+                // Throttle UI emissions to max once per 120ms to eliminate GC pauses & UI thread pegging
+                if (now - lastEmitTime >= 120 || sb.length < 200) {
+                    lastEmitTime = now
+                    val currentText = sb.toString()
+                    val liveStatus = extractLiveStatus(currentText)
+                    _ui.update { it.copy(partial = currentText, status = liveStatus) }
+                }
             }
             val finalText = sb.toString()
             val now = System.currentTimeMillis()

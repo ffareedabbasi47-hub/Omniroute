@@ -659,10 +659,11 @@ class Handler(BaseHTTPRequestHandler):
                 pass
 
             words = reply_text.split(" ")
-            for i, w in enumerate(words):
-                chunk = w + (" " if i < len(words) - 1 else "")
+            batch_size = 5
+            for i in range(0, len(words), batch_size):
+                chunk = " ".join(words[i:i + batch_size]) + " "
                 send_chunk(chunk)
-                time.sleep(0.012)
+                time.sleep(0.008)
 
             final_data = {
                 "id": "chatcmpl-" + uuid.uuid4().hex[:8],

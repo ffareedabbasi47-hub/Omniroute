@@ -777,7 +777,15 @@ private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
                     LiveStageHeader(status)
                 }
                 if (partial.isNotEmpty()) {
-                    MarkdownView(partial)
+                    val lines = remember(partial) { partial.lines() }
+                    val displayPartial = remember(partial) {
+                        if (lines.size > 60) {
+                            "… [Buffered ${lines.size - 45} lines above] …\n\n" + lines.takeLast(45).joinToString("\n")
+                        } else {
+                            partial
+                        }
+                    }
+                    MarkdownView(displayPartial)
                     Row(
                         modifier = Modifier.padding(top = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -785,7 +793,7 @@ private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
                         TypingDots()
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Writing code & files...",
+                            text = "Writing code & files (${lines.size} lines generated)...",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
