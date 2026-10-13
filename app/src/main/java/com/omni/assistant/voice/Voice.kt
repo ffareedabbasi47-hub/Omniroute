@@ -2,6 +2,7 @@ package com.omni.assistant.voice
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -10,6 +11,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import java.util.Locale
 
 /**
@@ -26,6 +28,64 @@ class VoiceController(context: Context) {
     private var ttsReady = false
     private var ttsFailed = false
     private var queued: (() -> Unit)? = null
+
+    init {
+        // Eagerly pre-warm TTS so there's zero lag on first speech response
+        initTts()
+    }
+
+    private fun initTts() {
+        if (tts != null) return
+        tts = TextToSpeech(appContext) { status ->
+            main.post {
+                if (status == TextToSpeech.SUCCESS) {
+                    configureEngine()
+                    ttsReady = true
+                } else {
+                    ttsFailed = true
+                    ttsReady = true
+                }
+                val pending = queued
+                queued = null
+                pending?.invoke()
+            }
+        }
+    }
+
+    private fun configureEngine() {
+        val engine = tts ?: return
+        try {
+            // Fluent, crisp, responsive conversational rate and pitch
+            engine.setSpeechRate(1.15f)
+            engine.setPitch(1.02f)
+
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+            engine.setAudioAttributes(audioAttributes)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun applyBestVoice(locale: Locale) {
+        val engine = tts ?: return
+        try {
+            val voices = engine.voices ?: return
+            val bestVoice = voices.asSequence()
+                .filter { it.locale.language == locale.language }
+                .sortedWith(
+                    compareByDescending<Voice> { it.quality }
+                        .thenByDescending { !it.isNetworkConnectionRequired }
+                        .thenByDescending { it.latency <= Voice.LATENCY_NORMAL }
+                )
+                .firstOrNull()
+            if (bestVoice != null) {
+                engine.voice = bestVoice
+            }
+        } catch (_: Exception) {
+        }
+    }
 
     val recognitionAvailable: Boolean
         get() = SpeechRecognizer.isRecognitionAvailable(appContext)
@@ -84,6 +144,9 @@ class VoiceController(context: Context) {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            // Respond quicker when speaker pauses
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
             if (languageTag != "auto") putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
         }
         r.startListening(intent)
@@ -116,8 +179,19 @@ class VoiceController(context: Context) {
 
     // ---- Spoken output --------------------------------------------------------------------
 
+    private fun cleanMarkdownForSpeech(input: String): String {
+        return input
+            .replace(Regex("```[\\s\\S]*?```"), " code snippet ")
+            .replace(Regex("`([^`]+)`"), "$1")
+            .replace(Regex("\\[([^\\]]+)\\]\\([^\\)]+\\)"), "$1")
+            .replace(Regex("[*_~#]"), "")
+            .replace(Regex("^[\\s]*[-*+]\\s+", RegexOption.MULTILINE), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     fun speak(text: String, languageTag: String, finished: () -> Unit, failed: (String) -> Unit) {
-        val clean = text.trim()
+        val clean = cleanMarkdownForSpeech(text)
         if (clean.isEmpty()) {
             finished()
             return
@@ -132,6 +206,10 @@ class VoiceController(context: Context) {
                 if (langResult == TextToSpeech.LANG_MISSING_DATA || langResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                     failed("No speech voice installed for ${locale.displayName}. Install it in Android settings.")
                 } else {
+                    applyBestVoice(locale)
+                    engine.setSpeechRate(1.15f)
+                    engine.setPitch(1.02f)
+
                     engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {}
                         override fun onDone(utteranceId: String?) {
@@ -144,7 +222,10 @@ class VoiceController(context: Context) {
                         }
                     })
                     val limited = clean.take(TextToSpeech.getMaxSpeechInputLength() - 1)
-                    engine.speak(limited, TextToSpeech.QUEUE_FLUSH, null, "omni-utterance")
+                    val params = Bundle().apply {
+                        putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f)
+                    }
+                    engine.speak(limited, TextToSpeech.QUEUE_FLUSH, params, "omni-utterance")
                 }
             }
         }
@@ -152,21 +233,7 @@ class VoiceController(context: Context) {
             action()
         } else {
             queued = action
-            if (tts == null) {
-                tts = TextToSpeech(appContext) { status ->
-                    main.post {
-                        if (status == TextToSpeech.SUCCESS) {
-                            ttsReady = true
-                        } else {
-                            ttsFailed = true
-                            ttsReady = true
-                        }
-                        val pending = queued
-                        queued = null
-                        pending?.invoke()
-                    }
-                }
-            }
+            initTts()
         }
     }
 

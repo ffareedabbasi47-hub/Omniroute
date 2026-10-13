@@ -99,7 +99,7 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Antigravity Status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            IconButton(onClick = { omni.connection.check() }) {
+                            IconButton(onClick = { omni.connection.check(force = true) }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Check connection")
                             }
                         }

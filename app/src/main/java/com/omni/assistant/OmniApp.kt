@@ -26,26 +26,49 @@ sealed interface ConnState {
     data class Failed(val message: String) : ConnState
 }
 
-/** Tracks whether the configured server is reachable. Never reports success without a real response. */
-class ConnectionMonitor(private val client: OmniRouteClient, private val settings: SettingsStore) {
+/** Tracks whether the configured server is reachable. Automatically starts Termux bridge if local server isn't running. */
+class ConnectionMonitor(
+    private val context: android.content.Context,
+    private val client: OmniRouteClient,
+    private val settings: SettingsStore
+) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow<ConnState>(ConnState.Unknown)
     val state: StateFlow<ConnState> = _state.asStateFlow()
+    private var autoStartAttempted = false
 
-    fun check() {
+    fun check(force: Boolean = false) {
         if (settings.current.baseUrl.isBlank()) {
             _state.value = ConnState.Unknown
             return
         }
+        if (force) autoStartAttempted = false
         _state.value = ConnState.Checking
         scope.launch {
-            _state.value = try {
-                ConnState.Ok(client.listModels())
-            } catch (e: ApiException) {
-                if (e.kind == ApiException.Kind.NOT_FOUND) {
-                    ConnState.Unverified("This server has no model list. Type the model name manually.")
+            try {
+                val models = client.listModels()
+                _state.value = ConnState.Ok(models)
+                autoStartAttempted = false
+            } catch (e: Exception) {
+                if (e is ApiException && e.kind == ApiException.Kind.NOT_FOUND) {
+                    _state.value = ConnState.Unverified("This server has no model list. Type the model name manually.")
                 } else {
-                    ConnState.Failed(e.message.orEmpty())
+                    val base = settings.current.baseUrl
+                    val isLocal = base.contains("127.0.0.1") || base.contains("localhost")
+                    if (isLocal && !autoStartAttempted) {
+                        autoStartAttempted = true
+                        com.omni.assistant.net.TermuxBridgeManager.startBridge(context)
+                        for (retry in 1..4) {
+                            kotlinx.coroutines.delay(1200)
+                            try {
+                                val retryModels = client.listModels()
+                                _state.value = ConnState.Ok(retryModels)
+                                return@launch
+                            } catch (_: Exception) {
+                            }
+                        }
+                    }
+                    _state.value = ConnState.Failed(e.message.orEmpty())
                 }
             }
         }
@@ -68,7 +91,12 @@ class OmniApp : Application() {
             .build() }
     val client: OmniRouteClient by lazy { OmniRouteClient(settings) }
     val bridge: BridgeClient by lazy { BridgeClient(settings) }
-    val connection: ConnectionMonitor by lazy { ConnectionMonitor(client, settings) }
+    val connection: ConnectionMonitor by lazy { ConnectionMonitor(this, client, settings) }
     val voice: VoiceController by lazy { VoiceController(this) }
     val attachments: AttachmentStore by lazy { AttachmentStore(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        voice // pre-warm TTS for instant vocal replies
+    }
 }
