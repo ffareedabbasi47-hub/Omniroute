@@ -8,6 +8,8 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import java.io.ByteArrayOutputStream
 
+typealias ThinkingSplit = AttachmentRules.ThinkingSplit
+
 /** Turns reply text into files the user can save or share. Pure helpers are testable without Android. */
 object FileExport {
     /** File extension for a Markdown code-fence language ("kotlin" -> "kt"); "txt" when unknown. */
@@ -188,10 +190,6 @@ object FileExport {
         val thinking: String?,
         val cleanText: String,
         val stageSummary: String
-    )
-
-    typealias ThinkingSplit = AttachmentRules.ThinkingSplit
-
     /**
      * Splits raw LLM response into thinking content and the clean user-facing response.
      * Supports <thinking>...</thinking> as well as unclosed <thinking> while streaming.
