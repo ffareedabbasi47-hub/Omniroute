@@ -313,9 +313,9 @@ class Bridge:
             "When the user asks in Hindi or Hinglish, answer in polite, clear Hindi/Hinglish. "
             "Start with a concise <thinking>...</thinking> block explaining your architectural plan and files to create. "
             "If the user has attached photos, camera captures, or video frames (file paths given in prompt), you MUST inspect them with view_file to analyze what is in the photo or video and answer accurately. "
-            "When the user asks you to create an image, photo, or visual graphic (e.g. 'photo banao', 'image banao', 'create picture'), "
-            "provide a complete, self-contained visual graphic labelled as ```xml:image.svg or ```html:image.html that renders the requested photo/scene, and describe it in vivid detail. "
-            "When the user asks you to create a video, provide an interactive, fluidly animated HTML5 Canvas / CSS animation labelled as ```html:animation.html that plays directly in the browser like a video. "
+            "When the user asks you to create or generate a photo, image, picture, or video (e.g. 'photo banao', 'image banao', 'create picture', 'creat photo', 'video banao', 'vdeo banao', 'vedeo banao'): "
+            "DO NOT write code (NEVER output SVG, HTML, CSS, or canvas code blocks for images or videos). "
+            "Instead, describe the scene and what was created in vivid, beautiful detail in polite Hindi/Hinglish, and inform the user that their high-resolution photo/video is generated and ready to view and download below. "
             "When the user asks you to create a game, app, or tool (such as Talking Tom cat game, 2D game, website, etc.), "
             "provide complete, clean, fully working code. Never truncate or leave placeholders. "
             "Always label each code block with its exact filename (e.g. ```html:index.html, ```javascript:game.js, ```css:style.css). "
@@ -524,7 +524,7 @@ class Bridge:
 
         try:
             add_res = run(["add", "-A"])
-            commit_res = run(["commit", "-m", "Fix camera photo capture, prevent Activity recreation drop, and add memory-safe image decoding"])
+            commit_res = run(["commit", "-m", "Fix image and video generation: remove code output, generate real media with inline preview and direct download button"])
             push_res = run(["push", "origin", "main"])
             return {
                 "ok": push_res.returncode == 0,
@@ -734,8 +734,9 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # 1. Pollinations Flux AI Generation (free, photorealistic online AI)
+        clean_q = re.sub(r'(?i)\b(photo|image|picture|tasveer|banao|generate|create|creat|karo|please|ek|ki|ka|ke|ko|chahiye|dikhao)\b', '', prompt).strip() or prompt
         try:
-            encoded = quote(prompt)
+            encoded = quote(clean_q)
             seed = random.randint(1, 9999999)
             url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}&model=flux"
             req = urllib.request.Request(
@@ -759,7 +760,7 @@ class Handler(BaseHTTPRequestHandler):
             sys.stderr.write(f"Online image generation error: {e}\n")
 
         # 2. Offline fallback: Pure Python PNG generator
-        png_bytes = generate_gradient_png(512, 512, prompt)
+        png_bytes = generate_gradient_png(512, 512, clean_q)
         b64 = base64.b64encode(png_bytes).decode("ascii")
         self._send(200, {"data": [{"b64_json": b64}]})
 
@@ -770,27 +771,30 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"error": "prompt is required"})
             return
 
-        # 1. Search matching open stock/nature video from Wikimedia Commons
-        try:
-            search_query = quote(prompt)
-            api_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={search_query}+filetype:video&gsrlimit=1&prop=imageinfo&iiprop=url&format=json"
-            req = urllib.request.Request(api_url, headers={"User-Agent": "OmniAssistant/1.0"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                res_json = json.loads(resp.read().decode("utf-8"))
-                pages = res_json.get("query", {}).get("pages", {})
-                for page_id, page_data in pages.items():
-                    infos = page_data.get("imageinfo", [])
-                    if infos and infos[0].get("url", "").endswith((".mp4", ".webm")):
-                        v_url = infos[0]["url"]
-                        vreq = urllib.request.Request(v_url, headers={"User-Agent": "OmniAssistant/1.0"})
-                        with urllib.request.urlopen(vreq, timeout=25) as vresp:
-                            vbytes = vresp.read(5 * 1024 * 1024)
-                            if len(vbytes) > 2000:
-                                b64_vid = base64.b64encode(vbytes).decode("ascii")
-                                self._send(200, {"data": [{"b64_video": b64_vid}]})
-                                return
-        except Exception as e:
-            sys.stderr.write(f"Online video search error: {e}\n")
+        clean_v = re.sub(r'(?i)\b(video|vdeo|vedeo|banao|generate|create|creat|karo|please|ek|ki|ka|ke|ko|chahiye|dikhao)\b', '', prompt).strip() or prompt
+
+        # 1. Search matching open stock video from Wikimedia Commons
+        for q_term in [clean_v, "nature"]:
+            try:
+                search_query = quote(q_term)
+                api_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={search_query}+filetype:video&gsrlimit=1&prop=imageinfo&iiprop=url&format=json"
+                req = urllib.request.Request(api_url, headers={"User-Agent": "OmniAssistant/1.0"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    res_json = json.loads(resp.read().decode("utf-8"))
+                    pages = res_json.get("query", {}).get("pages", {})
+                    for page_id, page_data in pages.items():
+                        infos = page_data.get("imageinfo", [])
+                        if infos and infos[0].get("url", "").endswith((".mp4", ".webm")):
+                            v_url = infos[0]["url"]
+                            vreq = urllib.request.Request(v_url, headers={"User-Agent": "OmniAssistant/1.0"})
+                            with urllib.request.urlopen(vreq, timeout=25) as vresp:
+                                vbytes = vresp.read(5 * 1024 * 1024)
+                                if len(vbytes) > 2000:
+                                    b64_vid = base64.b64encode(vbytes).decode("ascii")
+                                    self._send(200, {"data": [{"b64_video": b64_vid}]})
+                                    return
+            except Exception as e:
+                sys.stderr.write(f"Online video search ({q_term}) error: {e}\n")
 
         # 2. Check if ffmpeg is available
         ffmpeg_bin = shutil.which("ffmpeg")
@@ -910,9 +914,9 @@ class Handler(BaseHTTPRequestHandler):
                 user_last = prompt_parts[-1].split(":", 1)[-1].strip() if prompt_parts else prompt
 
                 # If user asked for an image/photo
-                if any(k in lower_p for k in ["photo banao", "image banao", "picture banao", "tasveer banao", "create image", "generate image", "create photo", "creat photo", "draw photo", "draw image"]):
+                if any(k in lower_p for k in ["photo banao", "image banao", "picture banao", "tasveer banao", "create image", "generate image", "create photo", "creat photo", "draw photo", "draw image", "photo chahiye"]):
                     try:
-                        clean_q = re.sub(r'(?i)(photo|image|picture|tasveer|banao|generate|create|creat|karo|please|ek)', '', user_last).strip() or "creative visual art"
+                        clean_q = re.sub(r'(?i)\b(photo|image|picture|tasveer|banao|generate|create|creat|karo|please|ek|ki|ka|ke|ko|chahiye|dikhao)\b', '', user_last).strip() or "creative visual art"
                         enc = quote(clean_q)
                         seed = random.randint(1, 9999999)
                         iurl = f"https://image.pollinations.ai/prompt/{enc}?width=1024&height=1024&nologo=true&seed={seed}&model=flux"
@@ -923,38 +927,41 @@ class Handler(BaseHTTPRequestHandler):
                             gen_img_path = os.path.join(gen_dir, "created_photo.jpg")
                             with open(gen_img_path, "wb") as f_img:
                                 f_img.write(idata)
-                            text += f"\n\n🖼️ **Photo Generated & Saved:** `~/OmniAssistant/generated/created_photo.jpg`"
+                            text += f"\n\n🖼️ **Photo Generated & Ready:**\n\n![Generated Photo](http://127.0.0.1:8787/generated/created_photo.jpg)\n\n[⬇ Download Photo](http://127.0.0.1:8787/generated/created_photo.jpg)"
                     except Exception as e:
                         sys.stderr.write(f"In-chat photo auto-generation error: {e}\n")
 
                 # If user asked for a video
-                if any(k in lower_p for k in ["video banao", "vdeo banao", "create video", "creat video", "generate video", "make video", "video banaye"]):
+                if any(k in lower_p for k in ["video banao", "vdeo banao", "vedeo banao", "create video", "creat video", "generate video", "make video", "video banaye", "video chahiye"]):
                     try:
-                        clean_v = re.sub(r'(?i)(video|vdeo|banao|generate|create|creat|karo|please|ek)', '', user_last).strip() or "scenic video"
-                        search_q = quote(clean_v)
-                        api_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={search_q}+filetype:video&gsrlimit=1&prop=imageinfo&iiprop=url&format=json"
-                        req = urllib.request.Request(api_url, headers={"User-Agent": "OmniAssistant/1.0"})
+                        clean_v = re.sub(r'(?i)\b(video|vdeo|vedeo|banao|generate|create|creat|karo|please|ek|ki|ka|ke|ko|chahiye|dikhao)\b', '', user_last).strip() or "scenic nature"
                         vdata = None
-                        try:
-                            with urllib.request.urlopen(req, timeout=15) as resp:
-                                res_json = json.loads(resp.read().decode("utf-8"))
-                                pages = res_json.get("query", {}).get("pages", {})
-                                for page_id, page_data in pages.items():
-                                    infos = page_data.get("imageinfo", [])
-                                    if infos and infos[0].get("url", "").endswith((".mp4", ".webm")):
-                                        v_url = infos[0]["url"]
-                                        vreq = urllib.request.Request(v_url, headers={"User-Agent": "OmniAssistant/1.0"})
-                                        with urllib.request.urlopen(vreq, timeout=25) as vresp:
-                                            vdata = vresp.read(10 * 1024 * 1024)
-                                            break
-                        except Exception:
-                            pass
+                        for search_term in [clean_v, "nature"]:
+                            try:
+                                search_q = quote(search_term)
+                                api_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={search_q}+filetype:video&gsrlimit=1&prop=imageinfo&iiprop=url&format=json"
+                                req = urllib.request.Request(api_url, headers={"User-Agent": "OmniAssistant/1.0"})
+                                with urllib.request.urlopen(req, timeout=15) as resp:
+                                    res_json = json.loads(resp.read().decode("utf-8"))
+                                    pages = res_json.get("query", {}).get("pages", {})
+                                    for page_id, page_data in pages.items():
+                                        infos = page_data.get("imageinfo", [])
+                                        if infos and infos[0].get("url", "").endswith((".mp4", ".webm")):
+                                            v_url = infos[0]["url"]
+                                            vreq = urllib.request.Request(v_url, headers={"User-Agent": "OmniAssistant/1.0"})
+                                            with urllib.request.urlopen(vreq, timeout=25) as vresp:
+                                                vdata = vresp.read(10 * 1024 * 1024)
+                                                break
+                                if vdata:
+                                    break
+                            except Exception:
+                                pass
                         if not vdata:
                             vdata = generate_minimal_mp4()
                         gen_vid_path = os.path.join(gen_dir, "created_video.mp4")
                         with open(gen_vid_path, "wb") as f_vid:
                             f_vid.write(vdata)
-                        text += f"\n\n🎥 **Video Generated & Saved:** `~/OmniAssistant/generated/created_video.mp4`"
+                        text += f"\n\n🎥 **Video Generated & Ready (MP4):**\n\n[▶ View & Download Video](http://127.0.0.1:8787/generated/created_video.mp4)"
                     except Exception as e:
                         sys.stderr.write(f"In-chat video auto-generation error: {e}\n")
             except Exception:

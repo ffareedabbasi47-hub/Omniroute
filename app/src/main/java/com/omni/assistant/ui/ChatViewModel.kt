@@ -297,7 +297,33 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             dao.touch(targetCid, now)
-            if (mode == ChatMode.CHAT) runGeneration(targetCid) else runMedia(targetCid, text, mode)
+
+            val lower = text.lowercase().trim()
+            val isImageGen = attached.isEmpty() && (mode == ChatMode.IMAGE || (mode == ChatMode.CHAT && (
+                lower.startsWith("photo banao") || lower.startsWith("image banao") ||
+                lower.startsWith("picture banao") || lower.startsWith("tasveer banao") ||
+                lower.startsWith("pic banao") || lower.startsWith("create image") ||
+                lower.startsWith("generate image") || lower.startsWith("create photo") ||
+                lower.startsWith("creat photo") || lower.startsWith("draw photo") ||
+                lower.startsWith("draw image") || lower.contains("ki photo banao") ||
+                lower.contains("ki image banao") || lower.contains("ka photo banao") ||
+                lower.contains("ka image banao")
+            )))
+
+            val isVideoGen = attached.isEmpty() && (mode == ChatMode.VIDEO || (mode == ChatMode.CHAT && (
+                lower.startsWith("video banao") || lower.startsWith("vdeo banao") ||
+                lower.startsWith("vedeo banao") || lower.startsWith("create video") ||
+                lower.startsWith("creat video") || lower.startsWith("generate video") ||
+                lower.startsWith("make video") || lower.contains("ki video banao") ||
+                lower.contains("ka video banao") || lower.contains("ki vdeo banao") ||
+                lower.contains("ki vedeo banao")
+            )))
+
+            when {
+                isImageGen -> runMedia(targetCid, text, ChatMode.IMAGE)
+                isVideoGen -> runMedia(targetCid, text, ChatMode.VIDEO)
+                else -> runGeneration(targetCid)
+            }
         }
         return true
     }
@@ -352,7 +378,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     throw ApiException(ApiException.Kind.CLIENT, "Couldn't store the generated file.")
                 }
                 val name = if (items.size > 1) "$kindWord-${i + 1}.${type.ext}" else "$kindWord.${type.ext}"
-                files.add(store.registerGenerated(dest, if (mode == ChatMode.IMAGE) "image" else "file", name, type.mime))
+                files.add(store.registerGenerated(dest, if (mode == ChatMode.IMAGE) "image" else "video", name, type.mime))
             }
             val now = System.currentTimeMillis()
             val mid = dao.insertMessage(

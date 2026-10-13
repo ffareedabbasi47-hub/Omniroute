@@ -413,7 +413,12 @@ fun ChatScreen(
                                     onSaveCode = ::saveCodeFile,
                                     onRunHtml = ::runHtmlPreview,
                                     onOpenAttachment = { a ->
-                                        if (a.kind == "file") openFile(a.path, a.mime, a.name) else viewing = a
+                                        val f = java.io.File(a.path)
+                                        if (a.kind == "file" || (a.kind == "video" && f.isFile)) {
+                                            openFile(a.path, a.mime.ifBlank { if (a.kind == "video") "video/mp4" else "*/*" }, a.name)
+                                        } else {
+                                            viewing = a
+                                        }
                                     }
                                 )
                             }
