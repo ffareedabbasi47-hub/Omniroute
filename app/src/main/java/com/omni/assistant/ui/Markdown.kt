@@ -356,7 +356,7 @@ private fun formatInlineMarkdown(text: String): AnnotatedString {
                 append(text.substring(lastIdx))
             }
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
         AnnotatedString(text)
     }
 }

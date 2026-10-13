@@ -101,7 +101,7 @@ class AttachmentStore(context: Context) {
                     if (idx >= 0) return c.getString(idx)
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
         return uri.lastPathSegment
     }
@@ -109,7 +109,7 @@ class AttachmentStore(context: Context) {
     private fun sourceSize(uri: Uri): Long {
         return try {
             ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             -1L
         }
     }
@@ -129,7 +129,7 @@ class AttachmentStore(context: Context) {
         }
         val decoded = try {
             resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             null
         } ?: throw AttachException("\"$name\" isn't a readable image.")
 
@@ -194,7 +194,7 @@ class AttachmentStore(context: Context) {
         } finally {
             try {
                 retriever.release()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
         }
     }
@@ -263,7 +263,7 @@ class AttachmentStore(context: Context) {
                         thumbBmp.recycle()
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
             }
         } catch (e: AttachException) {
             file.delete()
@@ -284,7 +284,7 @@ class AttachmentStore(context: Context) {
             ctx.contentResolver.openInputStream(uri)?.use {
                 ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
             } ?: ExifInterface.ORIENTATION_NORMAL
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             ExifInterface.ORIENTATION_NORMAL
         }
         if (orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED) {
@@ -301,7 +301,7 @@ class AttachmentStore(context: Context) {
         }
         val rotated = try {
             Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             bmp
         }
         if (rotated !== bmp) {
@@ -347,7 +347,7 @@ class AttachmentStore(context: Context) {
                 val t = File(thumb)
                 if (t.startsWith(root)) t.delete()
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
     }
 
@@ -435,7 +435,7 @@ class AttachmentStore(context: Context) {
             }
             bmp.recycle()
             if (outFile.exists() && outFile.length() > 0) outFile else source
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             source
         }
     }

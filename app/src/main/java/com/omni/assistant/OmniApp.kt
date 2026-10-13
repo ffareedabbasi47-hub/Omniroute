@@ -64,7 +64,7 @@ class ConnectionMonitor(
                                 val retryModels = client.listModels()
                                 _state.value = ConnState.Ok(retryModels)
                                 return@launch
-                            } catch (_: Exception) {
+                            } catch (e: Exception) {
                             }
                         }
                     }
@@ -113,13 +113,13 @@ class OmniApp : Application() {
                                 val sw = java.io.StringWriter()
                                 t.printStackTrace(java.io.PrintWriter(sw))
                                 file.writeText("Time: ${System.currentTimeMillis()}\nShielded UI Crash:\n$sw")
-                            } catch (_: Throwable) {
+                            } catch (t2: Throwable) {
                             }
                         }
                     }
                 }
             }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
         }
 
         // Background Thread Crash Shield
@@ -130,7 +130,7 @@ class OmniApp : Application() {
                 val sw = java.io.StringWriter()
                 throwable.printStackTrace(java.io.PrintWriter(sw))
                 file.writeText("Time: ${System.currentTimeMillis()}\nThread: ${thread.name}\n$sw")
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
             }
             if (throwable is OutOfMemoryError) {
                 defaultHandler?.uncaughtException(thread, throwable)
@@ -140,11 +140,11 @@ class OmniApp : Application() {
             val field = android.database.CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
             field.isAccessible = true
             field.set(null, 100 * 1024 * 1024) // 100 MB cursor window to prevent big code crashes
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
         }
         try {
             voice // pre-warm TTS for instant vocal replies
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
         }
     }
 }

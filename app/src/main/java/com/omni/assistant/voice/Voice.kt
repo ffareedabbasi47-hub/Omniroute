@@ -64,7 +64,7 @@ class VoiceController(context: Context) {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
             engine.setAudioAttributes(audioAttributes)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
     }
 
@@ -83,7 +83,7 @@ class VoiceController(context: Context) {
             if (bestVoice != null) {
                 engine.voice = bestVoice
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
     }
 
@@ -156,7 +156,7 @@ class VoiceController(context: Context) {
         recognizer?.let {
             try {
                 it.cancel()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
         }
         release()
@@ -166,7 +166,7 @@ class VoiceController(context: Context) {
         recognizer?.let {
             try {
                 it.destroy()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
         }
         recognizer = null

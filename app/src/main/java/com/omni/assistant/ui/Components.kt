@@ -290,7 +290,7 @@ fun decodeSampled(path: String, maxEdge: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     try {
         BitmapFactory.decodeFile(path, bounds)
-    } catch (_: Throwable) {
+    } catch (t: Throwable) {
         return null
     }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -301,7 +301,7 @@ fun decodeSampled(path: String, maxEdge: Int): Bitmap? {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.RGB_565
         })
-    } catch (_: Throwable) {
+    } catch (t: Throwable) {
         null
     }
 }
@@ -316,7 +316,7 @@ fun rememberBitmap(path: String?, maxEdge: Int): ImageBitmap? {
             withContext(Dispatchers.IO) {
                 try {
                     decodeSampled(path, maxEdge)?.asImageBitmap()
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
                     null
                 }
             }

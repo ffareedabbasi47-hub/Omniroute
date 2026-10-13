@@ -228,7 +228,7 @@ class AgentViewModel(app: Application) : AndroidViewModel(app) {
             if (id != null) {
                 try {
                     bridge.cancel(id)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                 }
             }
         }

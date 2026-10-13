@@ -27,7 +27,7 @@ object TermuxBridgeManager {
                 putExtra(EXTRA_BACKGROUND, true)
             }
             context.startService(serviceIntent)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             try {
                 // Fallback to broadcast intent
                 val broadcastIntent = Intent(ACTION_RUN_COMMAND).apply {
@@ -38,7 +38,7 @@ object TermuxBridgeManager {
                     putExtra(EXTRA_BACKGROUND, true)
                 }
                 context.sendBroadcast(broadcastIntent)
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
             }
         }
     }
@@ -53,7 +53,7 @@ object TermuxBridgeManager {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
             }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
         }
     }
 }

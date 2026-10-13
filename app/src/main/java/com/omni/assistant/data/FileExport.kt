@@ -328,7 +328,7 @@ object FileExport {
                 }
             }
             html
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             files.firstOrNull { it.name.endsWith(".html", ignoreCase = true) }?.content
         }
     }
