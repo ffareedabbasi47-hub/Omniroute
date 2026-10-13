@@ -51,6 +51,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
+import com.omni.assistant.data.FileExport
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Menu
@@ -382,7 +384,16 @@ fun ChatScreen(
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
                         ) {
                             if (ui.streaming) {
-                                item(key = "streaming") { StreamingBubble(ui.partial, mode, ui.status) }
+                                item(key = "streaming") {
+                                    StreamingBubble(
+                                        partial = ui.partial,
+                                        mode = mode,
+                                        status = ui.status,
+                                        activeFile = ui.activeFile,
+                                        completedFiles = ui.completedFiles,
+                                        thinking = ui.thinking
+                                    )
+                                }
                             }
                             items(messages.reversed().distinctBy { it.id }, key = { it.id }) { m ->
                                 MessageBubble(
@@ -760,7 +771,159 @@ private fun LiveStageHeader(status: String) {
 }
 
 @Composable
-private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
+private fun LiveClaudeStageCard(
+    status: String,
+    activeFile: FileExport.LiveFileInfo?,
+    completedFiles: List<FileExport.LiveFileInfo>,
+    thinking: String?
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmer"
+    )
+    var showThinking by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .border(
+                1.5.dp,
+                MaterialTheme.colorScheme.primary.copy(alpha = shimmerAlpha),
+                RoundedCornerShape(14.dp)
+            )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = shimmerAlpha))
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = if (activeFile != null) "Editing: ${activeFile.name} (Line ${activeFile.lineCount})" else "Autonomous Agent running in background...",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                TypingDots()
+            }
+
+            if (activeFile != null || completedFiles.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    completedFiles.forEach { file ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                        ) {
+                            Text(
+                                "✓ ${file.name} (${file.lineCount}L)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    if (activeFile != null) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.border(
+                                1.dp,
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = shimmerAlpha),
+                                RoundedCornerShape(8.dp)
+                            )
+                        ) {
+                            Text(
+                                "⚡ ${activeFile.name} (${activeFile.lineCount} lines...)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (!thinking.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showThinking = !showThinking }
+                ) {
+                    Column(Modifier.padding(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "🧠 Thought process ${if (showThinking) "(tap to hide)" else "(tap to view)"}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                if (showThinking) "▲" else "▼",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (showThinking) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = thinking,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamingBubble(
+    partial: String,
+    mode: ChatMode,
+    status: String?,
+    activeFile: FileExport.LiveFileInfo?,
+    completedFiles: List<FileExport.LiveFileInfo>,
+    thinking: String?
+) {
     val ex = LocalOmni.current
     Row(Modifier.fillMaxWidth()) {
         AssistantAvatar(isGenerating = true)
@@ -774,7 +937,7 @@ private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
         ) {
             Column {
                 if (status != null) {
-                    LiveStageHeader(status)
+                    LiveClaudeStageCard(status, activeFile, completedFiles, thinking)
                 }
                 if (partial.isNotEmpty()) {
                     val lines = remember(partial) { partial.lines() }
@@ -793,7 +956,7 @@ private fun StreamingBubble(partial: String, mode: ChatMode, status: String?) {
                         TypingDots()
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Writing code & files (${lines.size} lines generated)...",
+                            text = if (activeFile != null) "Writing ${activeFile.name} (${activeFile.lineCount} lines)..." else "Writing code & files (${lines.size} lines generated)...",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
@@ -888,6 +1051,47 @@ private fun MessageBubble(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
                     .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
+                if (codeFiles.isNotEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                    ) {
+                        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Project Files (${codeFiles.size}):",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                for (file in codeFiles) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.clickable { onSaveCode(file.name, file.content) }
+                                    ) {
+                                        Text(
+                                            "📄 ${file.name}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (m.content.isNotEmpty()) {
                     MarkdownView(
                         text = m.content,
@@ -918,6 +1122,32 @@ private fun MessageBubble(
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                if (codeFiles.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .clickable { onExport("zip") }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "📦 Download Project ZIP (${codeFiles.size} files)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }

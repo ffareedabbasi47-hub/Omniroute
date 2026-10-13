@@ -17,6 +17,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -203,18 +210,62 @@ fun SettingsScreen(
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Theme: ", style = MaterialTheme.typography.bodyMedium)
-                    listOf("system", "dark", "light").forEach { mode ->
-                        FilterChip(
-                            selected = settings.theme == mode,
-                            onClick = { omni.settings.update { it.copy(theme = mode) } },
-                            label = { Text(mode.replaceFirstChar { it.uppercase() }) }
-                        )
+                SectionLabel("App Theme & Color Palette")
+                Text(
+                    "Choose your favorite color style (12 custom themes):",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    THEME_PRESETS.chunked(2).forEach { rowPresets ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowPresets.forEach { preset ->
+                                val selected = settings.theme == preset.id || (settings.theme.isEmpty() && preset.id == "system")
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { omni.settings.update { it.copy(theme = preset.id) } }
+                                        .border(
+                                            width = if (selected) 2.dp else 1.dp,
+                                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                            shape = RoundedCornerShape(12.dp)
+                                        ),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                        else MaterialTheme.colorScheme.surfaceContainerHigh
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(preset.primaryColor)
+                                                .border(1.5.dp, Color.White.copy(alpha = 0.6f), CircleShape)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                preset.name,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            if (rowPresets.size == 1) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
 

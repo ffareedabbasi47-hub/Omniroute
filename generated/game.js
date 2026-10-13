@@ -1,1189 +1,1392 @@
-/* ========================================================
-   Talking Tom Cat 2 - Ultimate Web Game
-   JavaScript Engine: Audio, Animations, Physics & Gameplay
-   ======================================================== */
-
-// --- Global State ---
-const State = {
-  hunger: 80,
-  hygiene: 75,
-  energy: 90,
-  happy: 85,
-  coins: 150,
-  level: 1,
-  xp: 40,
-  activeRoom: 'living',
-  activeTool: null,
-  isSleeping: false,
-  isSpeaking: false,
-  isDizzy: false,
-  isEating: false,
-  hat: 'none',
-  glasses: 'none',
-  fur: 'grey',
-  accessory: 'none'
-};
-
-// --- Web Audio API Synthesizer (Zero External Dependencies) ---
-let audioCtx = null;
-
-function initAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-}
-
-const SoundFX = {
-  meow(pitch = 520) {
-    initAudio();
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const now = audioCtx.currentTime;
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(pitch, now);
-    osc.frequency.exponentialRampToValueAtTime(pitch * 1.3, now + 0.15);
-    osc.frequency.exponentialRampToValueAtTime(pitch * 0.75, now + 0.45);
-
-    gain.gain.setValueAtTime(0.01, now);
-    gain.gain.linearRampToValueAtTime(0.28, now + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.45);
-  },
-
-  purr() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const lfo = audioCtx.createOscillator();
-    const lfoGain = audioCtx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(45, now);
-
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(22, now); // 22Hz purr rumble
-    lfoGain.gain.setValueAtTime(0.08, now);
-
-    lfo.connect(gain.gain);
-    gain.gain.setValueAtTime(0.12, now);
-    gain.gain.linearRampToValueAtTime(0, now + 0.5);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    osc.start(now);
-    lfo.start(now);
-    osc.stop(now + 0.5);
-    lfo.stop(now + 0.5);
-  },
-
-  tickle() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    for (let i = 0; i < 3; i++) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      const t = now + i * 0.08;
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1100 + i * 150, t);
-      osc.frequency.exponentialRampToValueAtTime(1400, t + 0.06);
-
-      gain.gain.setValueAtTime(0.15, t);
-      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.06);
-
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(t);
-      osc.stop(t + 0.06);
-    }
-  },
-
-  slap() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(280, now);
-    osc.frequency.exponentialRampToValueAtTime(80, now + 0.2);
-
-    gain.gain.setValueAtTime(0.35, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.2);
-  },
-
-  boing() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(260, now);
-    osc.frequency.exponentialRampToValueAtTime(680, now + 0.25);
-
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.25);
-  },
-
-  crunch() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const bufferSize = audioCtx.sampleRate * 0.15;
-    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
-    }
-    const noise = audioCtx.createBufferSource();
-    noise.buffer = buffer;
-
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1400, now);
-
-    const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.3, now);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(audioCtx.destination);
-    noise.start(now);
-  },
-
-  gulp() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(600, now);
-    osc.frequency.exponentialRampToValueAtTime(220, now + 0.18);
-
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.18);
-  },
-
-  burp() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(95, now);
-    osc.frequency.linearRampToValueAtTime(120, now + 0.1);
-    osc.frequency.linearRampToValueAtTime(80, now + 0.35);
-
-    gain.gain.setValueAtTime(0.28, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.35);
-  },
-
-  splash() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(700, now);
-    osc.frequency.exponentialRampToValueAtTime(1300, now + 0.08);
-
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.12);
-  },
-
-  snore() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(140, now);
-    osc.frequency.linearRampToValueAtTime(110, now + 0.8);
-
-    gain.gain.setValueAtTime(0.02, now);
-    gain.gain.linearRampToValueAtTime(0.12, now + 0.4);
-    gain.gain.linearRampToValueAtTime(0.01, now + 0.8);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.8);
-  },
-
-  coin() {
-    initAudio();
-    if (!audioCtx) return;
-    const now = audioCtx.currentTime;
-    const osc1 = audioCtx.createOscillator();
-    const osc2 = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc1.type = 'sine';
-    osc2.type = 'sine';
-    osc1.frequency.setValueAtTime(987.77, now); // B5
-    osc2.frequency.setValueAtTime(1318.51, now + 0.08); // E6
-
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    osc1.start(now);
-    osc1.stop(now + 0.08);
-    osc2.start(now + 0.08);
-    osc2.stop(now + 0.35);
-  },
-
-  levelUp() {
-    initAudio();
-    if (!audioCtx) return;
-    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
-    const now = audioCtx.currentTime;
-    notes.forEach((freq, idx) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      const t = now + idx * 0.1;
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, t);
-
-      gain.gain.setValueAtTime(0.25, t);
-      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
-
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(t);
-      osc.stop(t + 0.25);
-    });
-  }
-};
-
-// --- DOM References ---
-const characterStage = document.getElementById('character-stage');
-const tomSvg = document.getElementById('tom-svg');
-const speechBubble = document.getElementById('speech-bubble');
-const eyeLeftPupil = document.getElementById('eye-left-pupil');
-const eyeRightPupil = document.getElementById('eye-right-pupil');
-const eyeLeftIris = document.getElementById('eye-left-iris');
-const eyeRightIris = document.getElementById('eye-right-iris');
-const mouthClosed = document.getElementById('mouth-closed');
-const mouthOpen = document.getElementById('mouth-open');
-const eyesEyelids = document.querySelectorAll('.cat-eyelid');
-const fxContainer = document.getElementById('fx-container');
-const micBtn = document.getElementById('mic-btn');
-
-// --- Haptic Feedback Helper ---
-function vibrate(ms = 25) {
-  if (navigator.vibrate) {
-    try { navigator.vibrate(ms); } catch (e) {}
-  }
-}
-
-// --- Status & Progression System ---
-function updateHUD() {
-  document.getElementById('val-hunger').style.width = `${State.hunger}%`;
-  document.getElementById('val-hygiene').style.width = `${State.hygiene}%`;
-  document.getElementById('val-energy').style.width = `${State.energy}%`;
-  document.getElementById('val-happy').style.width = `${State.happy}%`;
-  document.getElementById('user-coins').innerText = State.coins;
-  document.getElementById('user-level').innerText = `Lv. ${State.level}`;
-  saveProgress();
-}
-
-function addXP(amount) {
-  State.xp += amount;
-  if (State.xp >= 100) {
-    State.xp -= 100;
-    State.level += 1;
-    State.coins += 50;
-    SoundFX.levelUp();
-    showSpeechBubble(`🎉 Level Up! Level ${State.level} ban gaye! (+50 🪙)`);
-    spawnFloatingText(characterStage.offsetLeft + 160, characterStage.offsetTop + 40, 'LEVEL UP! 🌟');
-  }
-  updateHUD();
-}
-
-function addCoins(amount) {
-  State.coins += amount;
-  SoundFX.coin();
-  updateHUD();
-}
-
-// --- Floating FX Generator ---
-function spawnFloatingText(x, y, text, color = '#f59e0b') {
-  const el = document.createElement('div');
-  el.className = 'floating-heart';
-  el.innerText = text;
-  el.style.left = `${x}px`;
-  el.style.top = `${y}px`;
-  el.style.color = color;
-  el.style.fontWeight = 'bold';
-  fxContainer.appendChild(el);
-  setTimeout(() => el.remove(), 1200);
-}
-
-function spawnHeart(x, y) {
-  const emojis = ['💖', '😻', '✨', '🐾', '💕'];
-  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-  const el = document.createElement('div');
-  el.className = 'floating-heart';
-  el.innerText = emoji;
-  el.style.left = `${x + (Math.random() * 40 - 20)}px`;
-  el.style.top = `${y}px`;
-  fxContainer.appendChild(el);
-  setTimeout(() => el.remove(), 1200);
-}
-
-function showSpeechBubble(text, duration = 3000) {
-  speechBubble.innerText = text;
-  speechBubble.classList.add('active');
-  clearTimeout(speechBubble._timer);
-  speechBubble._timer = setTimeout(() => {
-    speechBubble.classList.remove('active');
-  }, duration);
-}
-
-// --- Cat Face & Expression Controllers ---
-function setCatMouth(isOpen) {
-  if (isOpen) {
-    mouthClosed.style.display = 'none';
-    mouthOpen.style.display = 'block';
-  } else {
-    mouthClosed.style.display = 'block';
-    mouthOpen.style.display = 'none';
-  }
-}
-
-function setEyesClosed(closed) {
-  eyesEyelids.forEach(el => {
-    el.style.display = closed ? 'block' : 'none';
-  });
-  if (closed) {
-    eyeLeftPupil.style.opacity = '0';
-    eyeRightPupil.style.opacity = '0';
-  } else {
-    eyeLeftPupil.style.opacity = '1';
-    eyeRightPupil.style.opacity = '1';
-  }
-}
-
-// Natural Blinking Loop
-setInterval(() => {
-  if (State.isSleeping || State.isDizzy) return;
-  setEyesClosed(true);
-  setTimeout(() => {
-    if (!State.isSleeping && !State.isDizzy) setEyesClosed(false);
-  }, 160);
-}, 3800);
-
-// --- Eye Tracking (Pupils follow pointer/touch) ---
-function trackEyes(clientX, clientY) {
-  if (State.isSleeping || State.isDizzy) return;
-  const rect = tomSvg.getBoundingClientRect();
-  const catCenterX = rect.left + rect.width / 2;
-  const catCenterY = rect.top + rect.height * 0.35;
-
-  const dx = clientX - catCenterX;
-  const dy = clientY - catCenterY;
-  const angle = Math.atan2(dy, dx);
-  const distance = Math.min(Math.hypot(dx, dy) / 40, 4.5);
-
-  const pupilX = Math.cos(angle) * distance;
-  const pupilY = Math.sin(angle) * distance;
-
-  eyeLeftPupil.setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
-  eyeRightPupil.setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
-  eyeLeftIris.setAttribute('transform', `translate(${pupilX * 0.6}, ${pupilY * 0.6})`);
-  eyeRightIris.setAttribute('transform', `translate(${pupilX * 0.6}, ${pupilY * 0.6})`);
-}
-
-window.addEventListener('pointermove', (e) => {
-  trackEyes(e.clientX, e.clientY);
-});
-
-// --- Cat Interactive Touch & Petting Behaviors ---
-let petCount = 0;
-let lastPetTime = 0;
-
-function handlePet(e) {
-  vibrate(20);
-  const now = Date.now();
-  if (now - lastPetTime > 250) {
-    SoundFX.purr();
-    lastPetTime = now;
-  }
-  
-  State.happy = Math.min(100, State.happy + 1.5);
-  addXP(1);
-  updateHUD();
-
-  tomSvg.classList.add('petting-happy');
-  setEyesClosed(true);
-  const rect = characterStage.getBoundingClientRect();
-  const x = (e.clientX || (e.touches && e.touches[0].clientX) || (rect.left + rect.width / 2)) - rect.left;
-  const y = (e.clientY || (e.touches && e.touches[0].clientY) || (rect.top + 80)) - rect.top;
-  spawnHeart(x + rect.left, y + rect.top);
-
-  clearTimeout(tomSvg._petTimeout);
-  tomSvg._petTimeout = setTimeout(() => {
-    tomSvg.classList.remove('petting-happy');
-    if (!State.isSleeping) setEyesClosed(false);
-  }, 450);
-}
-
-function handleHeadTap() {
-  petCount++;
-  if (petCount >= 4) {
-    triggerDizzy();
-    petCount = 0;
-    return;
-  }
-  vibrate(35);
-  SoundFX.meow(600);
-  showSpeechBubble('Meow! ❤️');
-  State.happy = Math.min(100, State.happy + 2);
-  updateHUD();
-}
-
-function triggerDizzy() {
-  State.isDizzy = true;
-  vibrate(60);
-  SoundFX.slap();
-  SoundFX.boing();
-  tomSvg.classList.add('dizzy');
-  showSpeechBubble('Arey chakkar aa gaya! 😵💫');
-  setEyesClosed(true);
-
-  setTimeout(() => {
-    tomSvg.classList.remove('dizzy');
-    State.isDizzy = false;
-    setEyesClosed(false);
-  }, 900);
-}
-
-function handleBellyTickle() {
-  vibrate(30);
-  SoundFX.tickle();
-  tomSvg.classList.add('tickled');
-  setCatMouth(true);
-  showSpeechBubble('Hahaha! Gudgudi ho rahi hai! 😂');
-  State.happy = Math.min(100, State.happy + 3);
-  addXP(2);
-  updateHUD();
-
-  clearTimeout(tomSvg._tickleTimeout);
-  tomSvg._tickleTimeout = setTimeout(() => {
-    tomSvg.classList.remove('tickled');
-    setCatMouth(false);
-  }, 600);
-}
-
-function handleFootTap() {
-  vibrate(40);
-  SoundFX.meow(420);
-  showSpeechBubble('Meoww! Mere pair pe mat maaro! 🐾');
-}
-
-function handleTailTap() {
-  vibrate(45);
-  SoundFX.slap();
-  showSpeechBubble('Meri poonch mat kheecho! 😾');
-  const tail = document.getElementById('cat-tail');
-  if (tail) {
-    tail.style.transform = 'rotate(-25deg)';
-    setTimeout(() => { tail.style.transform = ''; }, 300);
-  }
-}
-
-// Bind Touch Hotspots
-document.querySelector('.zone-head').addEventListener('pointerdown', (e) => {
-  handleHeadTap();
-  handlePet(e);
-});
-document.querySelector('.zone-head').addEventListener('pointermove', (e) => {
-  if (e.buttons > 0) handlePet(e);
-});
-document.querySelector('.zone-belly').addEventListener('pointerdown', handleBellyTickle);
-document.querySelector('.zone-belly').addEventListener('pointermove', (e) => {
-  if (e.buttons > 0) handleBellyTickle();
-});
-document.querySelector('.zone-left-foot').addEventListener('pointerdown', handleFootTap);
-document.querySelector('.zone-right-foot').addEventListener('pointerdown', handleFootTap);
-document.querySelector('.zone-tail').addEventListener('pointerdown', handleTailTap);
-
-// --- Room Switching System ---
-function switchRoom(roomId) {
-  if (State.isSleeping && roomId !== 'bedroom') {
-    showSpeechBubble('Tom so raha hai! Pehle light jalao! 😴');
-    return;
-  }
-
-  State.activeRoom = roomId;
-  document.querySelectorAll('.room-bg').forEach(el => el.classList.remove('active'));
-  document.getElementById(`bg-${roomId}`).classList.add('active');
-
-  document.querySelectorAll('.action-tray').forEach(el => el.style.display = 'none');
-  const roomTray = document.getElementById(`tray-${roomId}`);
-  if (roomTray) roomTray.style.display = 'flex';
-
-  document.querySelectorAll('.nav-tab').forEach(el => {
-    el.classList.toggle('active', el.dataset.room === roomId);
-  });
-
-  SoundFX.boing();
-}
-
-document.querySelectorAll('.nav-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    switchRoom(tab.dataset.room);
-  });
-});
-
-// --- Kitchen: Food Feeding System ---
-const Foods = {
-  milk: { name: 'Doodh', hunger: 15, xp: 5, emoji: '🥛', effect: 'normal' },
-  fish: { name: 'Machhli', hunger: 25, xp: 8, emoji: '🐟', effect: 'crunch' },
-  burger: { name: 'Burger', hunger: 35, xp: 12, emoji: '🍔', effect: 'big' },
-  chili: { name: 'Mirchi', hunger: 10, xp: 15, emoji: '🌶️', effect: 'spicy' },
-  icecream: { name: 'Ice Cream', hunger: 20, xp: 10, emoji: '🍦', effect: 'freeze' }
-};
-
-function feedTom(foodKey) {
-  if (State.isEating) return;
-  const food = Foods[foodKey];
-  if (!food) return;
-
-  State.isEating = true;
-  vibrate(30);
-
-  let chews = 0;
-  setCatMouth(true);
-  const chewInterval = setInterval(() => {
-    chews++;
-    SoundFX.crunch();
-    setCatMouth(chews % 2 === 1);
-    if (chews >= 5) {
-      clearInterval(chewInterval);
-      setCatMouth(false);
-      SoundFX.gulp();
-
-      if (food.effect === 'spicy') {
-        SoundFX.slap();
-        tomSvg.style.filter = 'drop-shadow(0 0 20px #ef4444) hue-rotate(-50deg)';
-        showSpeechBubble('AAG LAG GAYI! BOHOT TIKHA HAI! 🔥🌶️');
-        spawnFloatingText(characterStage.offsetLeft + 160, characterStage.offsetTop + 100, '🔥 AAAAAGH! 🔥', '#ef4444');
-        setTimeout(() => {
-          tomSvg.style.filter = '';
-          SoundFX.burp();
-          State.isEating = false;
-        }, 1800);
-      } else if (food.effect === 'freeze') {
-        tomSvg.style.filter = 'hue-rotate(160deg) drop-shadow(0 0 15px #67e8f9)';
-        showSpeechBubble('Brrr! Brain Freeze ho gaya! 🥶🍦');
-        setTimeout(() => {
-          tomSvg.style.filter = '';
-          State.isEating = false;
-        }, 1500);
-      } else {
-        setTimeout(() => {
-          SoundFX.burp();
-          showSpeechBubble(`Maza aa gaya! ${food.name} tasty tha! 😋`);
-          State.isEating = false;
-        }, 500);
-      }
-
-      State.hunger = Math.min(100, State.hunger + food.hunger);
-      addXP(food.xp);
-      updateHUD();
-    }
-  }, 180);
-}
-
-document.querySelectorAll('.food-item').forEach(item => {
-  item.addEventListener('click', () => {
-    feedTom(item.dataset.food);
-  });
-});
-
-// --- Bathroom: Cleaning Tools ---
-let bubblesList = [];
-
-function selectBathTool(toolName) {
-  State.activeTool = State.activeTool === toolName ? null : toolName;
-  document.querySelectorAll('#tray-bathroom .tray-item').forEach(btn => {
-    btn.classList.toggle('active-tool', btn.dataset.tool === State.activeTool);
-  });
-  if (State.activeTool === 'soap') {
-    showSpeechBubble('Tom ke upar sabun lagao! 🧼');
-  } else if (State.activeTool === 'shower') {
-    showSpeechBubble('Shower se jhaag dho do! 🚿');
-  }
-}
-
-document.querySelectorAll('#tray-bathroom .tray-item').forEach(btn => {
-  btn.addEventListener('click', () => selectBathTool(btn.dataset.tool));
-});
-
-characterStage.addEventListener('pointermove', (e) => {
-  if (State.activeRoom !== 'bathroom') return;
-  const rect = characterStage.getBoundingClientRect();
-  const relX = e.clientX - rect.left;
-  const relY = e.clientY - rect.top;
-
-  if (State.activeTool === 'soap' && e.buttons > 0) {
-    if (Math.random() < 0.4) {
-      createSoapBubble(relX, relY);
-      SoundFX.splash();
-      vibrate(15);
-    }
-  } else if (State.activeTool === 'shower' && e.buttons > 0) {
-    washSoapBubbles(relX, relY);
-  }
-});
-
-function createSoapBubble(x, y) {
-  if (bubblesList.length > 25) return;
-  const bubble = document.createElement('div');
-  const size = Math.floor(Math.random() * 25) + 20;
-  bubble.className = 'bubble';
-  bubble.style.width = `${size}px`;
-  bubble.style.height = `${size}px`;
-  bubble.style.left = `${x - size / 2}px`;
-  bubble.style.top = `${y - size / 2}px`;
-  characterStage.appendChild(bubble);
-  bubblesList.push(bubble);
-
-  bubble.addEventListener('click', () => {
-    SoundFX.splash();
-    bubble.remove();
-    bubblesList = bubblesList.filter(b => b !== bubble);
-  });
-}
-
-function washSoapBubbles(x, y) {
-  if (bubblesList.length > 0) {
-    SoundFX.splash();
-    vibrate(20);
-    bubblesList.forEach(b => {
-      b.style.transition = 'transform 0.3s, opacity 0.3s';
-      b.style.transform = 'translateY(80px) scale(0)';
-      b.style.opacity = '0';
-      setTimeout(() => b.remove(), 300);
-    });
-    bubblesList = [];
-
-    State.hygiene = Math.min(100, State.hygiene + 25);
-    addXP(10);
-    updateHUD();
-    spawnFloatingText(characterStage.offsetLeft + 160, characterStage.offsetTop + 120, '✨ CHAKACHAK! ✨', '#06b6d4');
-    showSpeechBubble('Shabaash! Tom ekdum saaf aur chamakdar ho gaya! 🛁✨');
-  }
-}
-
-// --- Bedroom: Sleep System ---
-const bedLamp = document.getElementById('bed-lamp');
-const darkOverlay = document.getElementById('bedroom-dark-overlay');
-let snoreTimer = null;
-
-function toggleLamp() {
-  State.isSleeping = !State.isSleeping;
-  vibrate(30);
-  SoundFX.boing();
-
-  if (State.isSleeping) {
-    bedLamp.classList.add('lamp-off');
-    darkOverlay.classList.add('sleep-mode');
-    setEyesClosed(true);
-    showSpeechBubble('Shhh... Tom so raha hai! 😴💤');
-
-    snoreTimer = setInterval(() => {
-      if (!State.isSleeping) return;
-      SoundFX.snore();
-      spawnFloatingZzz();
-      State.energy = Math.min(100, State.energy + 5);
-      updateHUD();
-      if (State.energy >= 100) {
-        showSpeechBubble('Tom ki neend poori ho gayi! Energy 100%! ⚡');
-      }
-    }, 2800);
-  } else {
-    bedLamp.classList.remove('lamp-off');
-    darkOverlay.classList.remove('sleep-mode');
-    setEyesClosed(false);
-    clearInterval(snoreTimer);
-    showSpeechBubble('Good Morning! Tom uth gaya! 🌞😺');
-    SoundFX.meow(540);
-  }
-}
-
-if (bedLamp) bedLamp.addEventListener('click', toggleLamp);
-
-function spawnFloatingZzz() {
-  const el = document.createElement('div');
-  el.className = 'floating-zzz';
-  el.innerText = 'Zzz...';
-  el.style.left = `${characterStage.offsetLeft + 200}px`;
-  el.style.top = `${characterStage.offsetTop + 100}px`;
-  fxContainer.appendChild(el);
-  setTimeout(() => el.remove(), 2500);
-}
-
-// --- Props (Punching Bag & Ball) ---
-const punchingBag = document.getElementById('punching-bag');
-if (punchingBag) {
-  punchingBag.addEventListener('click', () => {
-    vibrate(40);
-    SoundFX.slap();
-    punchingBag.style.transform = 'rotate(-30deg)';
-    setTimeout(() => {
-      punchingBag.style.transform = 'rotate(20deg)';
-      setTimeout(() => {
-        punchingBag.style.transform = 'rotate(-10deg)';
-        setTimeout(() => { punchingBag.style.transform = ''; }, 200);
-      }, 200);
-    }, 200);
-    showSpeechBubble('Dhooom! Zabardast Punch! 🥊');
-    State.happy = Math.min(100, State.happy + 5);
-    updateHUD();
-  });
-}
-
-const ballProp = document.getElementById('ball-prop');
-if (ballProp) {
-  ballProp.addEventListener('click', () => {
-    vibrate(30);
-    SoundFX.boing();
-    ballProp.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-    ballProp.style.transform = 'translateY(-140px) scale(1.15)';
-    setTimeout(() => {
-      ballProp.style.transform = 'translateY(0) scale(1)';
-    }, 400);
-    State.happy = Math.min(100, State.happy + 4);
-    updateHUD();
-  });
-}
-
-// --- Talking Tom Speech Engine ---
-let recognition = null;
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.lang = 'hi-IN';
-
-  recognition.onstart = () => {
-    micBtn.classList.add('listening');
-    showSpeechBubble('Sun raha hu... bolo kuch! 👂🎙️');
-  };
-
-  recognition.onresult = (event) => {
-    const text = event.results[0][0].transcript;
-    micBtn.classList.remove('listening');
-    speakLikeTom(text);
-  };
-
-  recognition.onerror = () => {
-    micBtn.classList.remove('listening');
-    showSpeechBubble('Aawaz theek se nahi suni! Dobara bolo.');
-  };
-
-  recognition.onend = () => {
-    micBtn.classList.remove('listening');
-  };
-}
-
-function startListening() {
-  if (State.isSpeaking) return;
-  initAudio();
-  if (recognition) {
-    try {
-      recognition.start();
-    } catch (e) {
-      recognition.stop();
-    }
-  } else {
-    openTalkModal();
-  }
-}
-
-if (micBtn) {
-  micBtn.addEventListener('click', startListening);
-}
-
-function speakLikeTom(text) {
-  if (!text) return;
-  initAudio();
-  showSpeechBubble(text, 5000);
-
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.pitch = 1.85; // High Pitch helium voice
-    utterance.rate = 1.15;
-
-    const voices = window.speechSynthesis.getVoices();
-    const cuteVoice = voices.find(v => v.lang.includes('hi') || v.name.includes('Google') || v.name.includes('Natural'));
-    if (cuteVoice) utterance.voice = cuteVoice;
-
-    State.isSpeaking = true;
-
-    const mouthInterval = setInterval(() => {
-      if (!State.isSpeaking) {
-        clearInterval(mouthInterval);
-        setCatMouth(false);
-        return;
-      }
-      setCatMouth(Math.random() > 0.4);
-    }, 120);
-
-    utterance.onend = () => {
-      State.isSpeaking = false;
-      clearInterval(mouthInterval);
-      setCatMouth(false);
+// game.js - Core Engine for My Talking Tom 2 Game
+// Complete interactive cat physics, animation, rooms, voice mimic, and mini-game
+
+(function() {
+    'use strict';
+
+    // Game State
+    const state = {
+        coins: parseInt(localStorage.getItem('tom_coins') || '150', 10),
+        hunger: parseInt(localStorage.getItem('tom_hunger') || '75', 10),
+        energy: parseInt(localStorage.getItem('tom_energy') || '85', 10),
+        toilet: parseInt(localStorage.getItem('tom_toilet') || '40', 10), // 0 is empty, 100 is urgent
+        hygiene: parseInt(localStorage.getItem('tom_hygiene') || '80', 10),
+        happiness: parseInt(localStorage.getItem('tom_happiness') || '90', 10),
+        currentRoom: 'living', // living, kitchen, bathroom, bedroom, doctor
+        isSleeping: false,
+        isSick: false,
+        equipped: JSON.parse(localStorage.getItem('tom_equipped') || JSON.stringify({
+            hat: 'none',
+            glasses: 'none',
+            fur: '#8e9aaf'
+        })),
+        unlockedItems: JSON.parse(localStorage.getItem('tom_unlocked') || JSON.stringify(['none', '#8e9aaf'])),
+        soapBubbles: []
     };
 
-    utterance.onerror = () => {
-      State.isSpeaking = false;
-      clearInterval(mouthInterval);
-      setCatMouth(false);
+    // Tom Character Procedural State
+    const tom = {
+        x: 210,
+        y: 440,
+        baseScale: 1.0,
+        scaleY: 1.0,
+        scaleX: 1.0,
+        rotation: 0,
+        headAngle: 0,
+        // Eyes
+        blinkTimer: 0,
+        isBlinking: false,
+        lookTargetX: 0,
+        lookTargetY: 0,
+        curLookX: 0,
+        curLookY: 0,
+        eyeState: 'normal', // normal, happy, dizzy, sleepy, surprised
+        // Mouth
+        mouthOpen: 0,
+        mouthState: 'smile', // smile, open, talking, chew, ouch, fire
+        // Action state
+        action: 'idle', // idle, pet, slap, eat, sleep, toilet, sick, listening, talking
+        actionTimer: 0,
+        // Tail
+        tailAngle: 0,
+        tailPhase: 0,
+        // Chewing counter
+        chewPhase: 0,
+        // Fire breath
+        fireParticles: [],
+        stars: [],
+        hearts: []
     };
 
-    window.speechSynthesis.speak(utterance);
-  } else {
-    SoundFX.meow(650);
-    setTimeout(() => SoundFX.meow(550), 300);
-  }
-}
+    // DOM Elements
+    const canvas = document.getElementById('tom-canvas');
+    const ctx = canvas.getContext('2d');
+    const stage = document.getElementById('stage');
+    const speechBubble = document.getElementById('speech-bubble');
+    const coinCountEl = document.getElementById('coin-count');
 
-// --- Talk Modal ---
-const talkModal = document.getElementById('talk-modal');
-const talkInput = document.getElementById('talk-input');
-const btnSendTalk = document.getElementById('btn-send-talk');
-
-function openTalkModal() {
-  talkModal.classList.add('open');
-}
-
-function closeTalkModal() {
-  talkModal.classList.remove('open');
-}
-
-if (btnSendTalk) {
-  btnSendTalk.addEventListener('click', () => {
-    const val = talkInput.value.trim();
-    if (val) {
-      closeTalkModal();
-      speakLikeTom(val);
-      talkInput.value = '';
+    // Setup Canvas DPI
+    function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        tom.x = rect.width / 2;
+        tom.y = rect.height * 0.78;
     }
-  });
-}
 
-document.querySelectorAll('.phrase-chip').forEach(chip => {
-  chip.addEventListener('click', () => {
-    closeTalkModal();
-    speakLikeTom(chip.innerText);
-  });
-});
+    // Save Game State
+    function saveState() {
+        localStorage.setItem('tom_coins', state.coins);
+        localStorage.setItem('tom_hunger', state.hunger);
+        localStorage.setItem('tom_energy', state.energy);
+        localStorage.setItem('tom_toilet', state.toilet);
+        localStorage.setItem('tom_hygiene', state.hygiene);
+        localStorage.setItem('tom_happiness', state.happiness);
+        localStorage.setItem('tom_equipped', JSON.stringify(state.equipped));
+        localStorage.setItem('tom_unlocked', JSON.stringify(state.unlockedItems));
+        updateMetersUI();
+    }
 
-// --- Wardrobe ---
-const wardrobeModal = document.getElementById('wardrobe-modal');
-const btnOpenWardrobe = document.getElementById('btn-open-wardrobe');
+    // Update UI Meters
+    function updateMetersUI() {
+        coinCountEl.textContent = state.coins;
 
-if (btnOpenWardrobe) {
-  btnOpenWardrobe.addEventListener('click', () => {
-    wardrobeModal.classList.add('open');
-  });
-}
+        updateSingleMeter('meter-hunger', state.hunger, true);
+        updateSingleMeter('meter-energy', state.energy, true);
+        updateSingleMeter('meter-toilet', 100 - state.toilet, true); // Higher is cleaner
+        updateSingleMeter('meter-hygiene', state.hygiene, true);
+    }
 
-function equipHat(hatType) {
-  State.hat = hatType;
-  document.getElementById('hat-party').style.display = hatType === 'party' ? 'block' : 'none';
-  document.getElementById('hat-wizard').style.display = hatType === 'wizard' ? 'block' : 'none';
-  document.getElementById('hat-crown').style.display = hatType === 'crown' ? 'block' : 'none';
-  SoundFX.coin();
-  saveProgress();
-}
+    function updateSingleMeter(id, val, inverted = false) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        val = Math.max(0, Math.min(100, val));
+        el.style.width = val + '%';
+        el.className = 'meter-bar-inner ' + (val > 55 ? 'green' : val > 25 ? 'yellow' : 'red');
+    }
 
-function equipGlasses(glassesType) {
-  State.glasses = glassesType;
-  document.getElementById('glasses-cool').style.display = glassesType === 'cool' ? 'block' : 'none';
-  SoundFX.coin();
-  saveProgress();
-}
+    // Show Speech Bubble with Text
+    let speechTimeout = null;
+    function showSpeech(text, duration = 3000) {
+        if (!speechBubble) return;
+        speechBubble.textContent = text;
+        speechBubble.classList.add('active');
+        clearTimeout(speechTimeout);
+        speechTimeout = setTimeout(() => {
+            speechBubble.classList.remove('active');
+        }, duration);
+    }
 
-function equipFur(furType) {
-  State.fur = furType;
-  const colors = {
-    grey: { base: '#8c9ba5', shadow: '#6c7982', belly: '#e2e8f0' },
-    orange: { base: '#f97316', shadow: '#c2410c', belly: '#ffedd5' },
-    black: { base: '#334155', shadow: '#1e293b', belly: '#64748b' },
-    white: { base: '#f8fafc', shadow: '#cbd5e1', belly: '#ffffff' }
-  };
-  const c = colors[furType] || colors.grey;
-  document.documentElement.style.setProperty('--fur-color', c.base);
-  document.documentElement.style.setProperty('--fur-shadow', c.shadow);
-  document.documentElement.style.setProperty('--fur-belly', c.belly);
-  SoundFX.coin();
-  saveProgress();
-}
+    // Floating Particle Generator
+    function createFloatingParticle(icon, x, y) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.textContent = icon;
+        p.style.left = (x || canvas.offsetLeft + canvas.offsetWidth / 2) + 'px';
+        p.style.top = (y || canvas.offsetTop + 180) + 'px';
+        stage.appendChild(p);
+        setTimeout(() => p.remove(), 1200);
+    }
 
-function equipAccessory(accType) {
-  State.accessory = accType;
-  document.getElementById('acc-bowtie').style.display = accType === 'bowtie' ? 'block' : 'none';
-  SoundFX.coin();
-  saveProgress();
-}
+    // --- PROCEDURAL DRAWING OF TOM THE CAT ---
+    function drawTom() {
+        const rect = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
 
-document.querySelectorAll('.wardrobe-item').forEach(item => {
-  item.addEventListener('click', () => {
-    const type = item.dataset.type;
-    const value = item.dataset.value;
-    if (type === 'hat') equipHat(value);
-    if (type === 'glasses') equipGlasses(value);
-    if (type === 'fur') equipFur(value);
-    if (type === 'accessory') equipAccessory(value);
+        ctx.save();
+        ctx.translate(tom.x, tom.y);
+        ctx.scale(tom.scaleX, tom.scaleY);
+        ctx.rotate(tom.rotation);
 
-    item.parentElement.querySelectorAll('.wardrobe-item').forEach(el => el.classList.remove('equipped'));
-    item.classList.add('equipped');
-  });
-});
+        const fur = state.equipped.fur || '#8e9aaf';
+        const belly = '#f8f9fa';
+        const earInner = '#ffcad4';
 
-document.querySelectorAll('.btn-close').forEach(btn => {
-  btn.addEventListener('click', () => {
-    btn.closest('.modal-overlay').classList.remove('open');
-  });
-});
+        // 1. TAIL (Behind body)
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = fur;
+        ctx.lineWidth = 18;
+        ctx.lineCap = 'round';
+        const tailEnd = Math.sin(tom.tailPhase) * 28;
+        ctx.moveTo(35, -20);
+        ctx.quadraticCurveTo(80 + tailEnd, -70, 70 + tailEnd, -120);
+        ctx.stroke();
+        // Tail tip white fluff
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.moveTo(70 + tailEnd, -105);
+        ctx.lineTo(70 + tailEnd, -120);
+        ctx.stroke();
+        ctx.restore();
 
-// --- Mini Game: Canvas Arcade ---
-const minigameModal = document.getElementById('minigame-modal');
-const btnOpenGame = document.getElementById('btn-open-game');
-const canvas = document.getElementById('minigame-canvas');
-const ctx = canvas.getContext('2d');
-const scoreDisplay = document.getElementById('mg-score');
-const livesDisplay = document.getElementById('mg-lives');
-const btnStartGame = document.getElementById('btn-start-mg');
+        // 2. FEET & PAWS (Bottom)
+        // Left Foot
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        ctx.ellipse(-55, 10, 26, 18, -0.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(-55, 12, 18, 12, -0.1, 0, Math.PI * 2);
+        ctx.fill();
 
-let mgLoop = null;
-let mgScore = 0;
-let mgLives = 3;
-let mgBasketX = 140;
-let mgItems = [];
-let mgIsRunning = false;
+        // Right Foot
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        ctx.ellipse(55, 10, 26, 18, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(55, 12, 18, 12, 0.1, 0, Math.PI * 2);
+        ctx.fill();
 
-if (btnOpenGame) {
-  btnOpenGame.addEventListener('click', () => {
-    minigameModal.classList.add('open');
-  });
-}
+        // 3. BODY
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        ctx.ellipse(0, -90, 75, 105, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-function startMiniGame() {
-  mgScore = 0;
-  mgLives = 3;
-  mgItems = [];
-  mgBasketX = canvas.width / 2 - 25;
-  mgIsRunning = true;
-  btnStartGame.style.display = 'none';
-  scoreDisplay.innerText = `Score: 0`;
-  livesDisplay.innerText = `❤️ ❤️ ❤️`;
+        // White belly patch
+        ctx.fillStyle = belly;
+        ctx.beginPath();
+        ctx.ellipse(0, -78, 48, 70, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-  if (mgLoop) cancelAnimationFrame(mgLoop);
-  runMiniGameLoop();
-}
+        // Belly button cute dot
+        ctx.fillStyle = '#ced4da';
+        ctx.beginPath();
+        ctx.arc(0, -50, 3, 0, Math.PI * 2);
+        ctx.fill();
 
-btnStartGame.addEventListener('click', startMiniGame);
-
-canvas.addEventListener('pointermove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const scale = canvas.width / rect.width;
-  mgBasketX = (e.clientX - rect.left) * scale - 25;
-  mgBasketX = Math.max(0, Math.min(canvas.width - 50, mgBasketX));
-});
-
-function runMiniGameLoop() {
-  if (!mgIsRunning) return;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (Math.random() < 0.04) {
-    const isBomb = Math.random() < 0.25;
-    const isCoin = !isBomb && Math.random() < 0.3;
-    mgItems.push({
-      x: Math.random() * (canvas.width - 30) + 10,
-      y: -20,
-      speed: Math.random() * 2.5 + 2.5,
-      type: isBomb ? 'bomb' : (isCoin ? 'coin' : 'fish'),
-      emoji: isBomb ? '💣' : (isCoin ? '🪙' : '🐟')
-    });
-  }
-
-  // Draw Basket
-  ctx.fillStyle = '#f59e0b';
-  ctx.beginPath();
-  ctx.arc(mgBasketX + 25, canvas.height - 20, 25, 0, Math.PI, false);
-  ctx.fill();
-  ctx.fillStyle = '#1e293b';
-  ctx.font = '20px sans-serif';
-  ctx.fillText('🐱', mgBasketX + 15, canvas.height - 22);
-
-  // Update & Draw Items
-  for (let i = mgItems.length - 1; i >= 0; i--) {
-    const item = mgItems[i];
-    item.y += item.speed;
-
-    ctx.font = '24px sans-serif';
-    ctx.fillText(item.emoji, item.x - 12, item.y);
-
-    if (item.y >= canvas.height - 45 && item.y <= canvas.height - 15) {
-      if (item.x >= mgBasketX - 10 && item.x <= mgBasketX + 55) {
-        if (item.type === 'bomb') {
-          vibrate(50);
-          SoundFX.slap();
-          mgLives--;
-          livesDisplay.innerText = '❤️ '.repeat(Math.max(0, mgLives));
-          if (mgLives <= 0) {
-            endMiniGame();
-            return;
-          }
-        } else if (item.type === 'coin') {
-          SoundFX.coin();
-          mgScore += 25;
-          addCoins(2);
+        // 4. ARMS & HANDS
+        // Left Arm
+        ctx.save();
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        if (tom.action === 'listening') {
+            // Raised to ear
+            ctx.ellipse(-70, -140, 16, 45, 0.5, 0, Math.PI * 2);
         } else {
-          SoundFX.crunch();
-          mgScore += 10;
+            ctx.ellipse(-72, -90, 18, 50, 0.25, 0, Math.PI * 2);
         }
-        scoreDisplay.innerText = `Score: ${mgScore}`;
-        mgItems.splice(i, 1);
-        continue;
-      }
+        ctx.fill();
+        // Hand
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(tom.action === 'listening' ? -65 : -76, tom.action === 'listening' ? -175 : -45, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Right Arm
+        ctx.save();
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        ctx.ellipse(72, -90, 18, 50, -0.25, 0, Math.PI * 2);
+        ctx.fill();
+        // Hand
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(76, -45, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Neck Bowtie or Bell
+        if (state.equipped.neck === 'red_bowtie') {
+            ctx.fillStyle = '#e63946';
+            ctx.beginPath();
+            ctx.moveTo(-16, -170); ctx.lineTo(-16, -150); ctx.lineTo(0, -160); ctx.fill();
+            ctx.moveTo(16, -170); ctx.lineTo(16, -150); ctx.lineTo(0, -160); ctx.fill();
+            ctx.fillStyle = '#ffbe0b';
+            ctx.beginPath(); ctx.arc(0, -160, 6, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // 5. HEAD
+        ctx.save();
+        ctx.translate(0, -195);
+        ctx.rotate(tom.headAngle);
+
+        // EARS
+        // Left Ear
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        ctx.moveTo(-75, -50);
+        ctx.lineTo(-65, -125);
+        ctx.lineTo(-20, -75);
+        ctx.closePath();
+        ctx.fill();
+        // Inner Left Ear
+        ctx.fillStyle = earInner;
+        ctx.beginPath();
+        ctx.moveTo(-68, -55);
+        ctx.lineTo(-62, -112);
+        ctx.lineTo(-26, -72);
+        ctx.closePath();
+        ctx.fill();
+
+        // Right Ear
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        ctx.moveTo(75, -50);
+        ctx.lineTo(65, -125);
+        ctx.lineTo(20, -75);
+        ctx.closePath();
+        ctx.fill();
+        // Inner Right Ear
+        ctx.fillStyle = earInner;
+        ctx.beginPath();
+        ctx.moveTo(68, -55);
+        ctx.lineTo(62, -112);
+        ctx.lineTo(26, -72);
+        ctx.closePath();
+        ctx.fill();
+
+        // Big Round Cute Cat Face
+        ctx.fillStyle = fur;
+        ctx.beginPath();
+        ctx.ellipse(0, -30, 88, 76, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // White Muzzle / Cheeks
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(-24, -14, 30, 22, -0.1, 0, Math.PI * 2);
+        ctx.ellipse(24, -14, 30, 22, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Whiskers (3 on each side)
+        ctx.strokeStyle = '#495057';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        // Left whiskers
+        ctx.moveTo(-45, -16); ctx.lineTo(-95, -26);
+        ctx.moveTo(-45, -10); ctx.lineTo(-98, -10);
+        ctx.moveTo(-45, -4);  ctx.lineTo(-92, 10);
+        // Right whiskers
+        ctx.moveTo(45, -16);  ctx.lineTo(95, -26);
+        ctx.moveTo(45, -10);  ctx.lineTo(98, -10);
+        ctx.moveTo(45, -4);   ctx.lineTo(92, 10);
+        ctx.stroke();
+
+        // Rosy Cheeks when Happy
+        if (tom.eyeState === 'happy' || tom.action === 'pet') {
+            ctx.fillStyle = 'rgba(255, 117, 143, 0.55)';
+            ctx.beginPath();
+            ctx.arc(-52, -15, 14, 0, Math.PI * 2);
+            ctx.arc(52, -15, 14, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Cute Pink Heart Nose
+        ctx.fillStyle = '#ff758f';
+        ctx.beginPath();
+        ctx.moveTo(0, -22);
+        ctx.quadraticCurveTo(-10, -32, -12, -26);
+        ctx.quadraticCurveTo(-10, -18, 0, -14);
+        ctx.quadraticCurveTo(10, -18, 12, -26);
+        ctx.quadraticCurveTo(10, -32, 0, -22);
+        ctx.fill();
+
+        // EYES
+        drawEye(-36, -52, tom.curLookX, tom.curLookY, tom.eyeState, tom.isBlinking);
+        drawEye(36, -52, tom.curLookX, tom.curLookY, tom.eyeState, tom.isBlinking);
+
+        // MOUTH
+        drawMouth();
+
+        // SICK / BAND-AID (If in Doctor room or sick)
+        if (state.isSick || state.currentRoom === 'doctor') {
+            ctx.save();
+            ctx.translate(-35, -80);
+            ctx.rotate(-0.3);
+            ctx.fillStyle = '#ffe3a8';
+            ctx.fillRect(-18, -8, 36, 16);
+            ctx.strokeStyle = '#e09f3e';
+            ctx.strokeRect(-18, -8, 36, 16);
+            ctx.fillStyle = '#e63946';
+            ctx.fillRect(-3, -6, 6, 12);
+            ctx.fillRect(-6, -3, 12, 6);
+            ctx.restore();
+        }
+
+        // ACCESSORIES: GLASSES
+        if (state.equipped.glasses === 'cool_shades') {
+            ctx.fillStyle = '#111111';
+            ctx.strokeStyle = '#333333';
+            ctx.lineWidth = 3;
+            // Left lens
+            ctx.beginPath();
+            ctx.roundRect(-66, -66, 56, 32, [8, 8, 18, 18]);
+            ctx.fill(); ctx.stroke();
+            // Right lens
+            ctx.beginPath();
+            ctx.roundRect(10, -66, 56, 32, [8, 8, 18, 18]);
+            ctx.fill(); ctx.stroke();
+            // Bridge
+            ctx.beginPath();
+            ctx.moveTo(-10, -56); ctx.lineTo(10, -56); ctx.stroke();
+        }
+
+        // ACCESSORIES: HATS
+        drawHat(state.equipped.hat);
+
+        ctx.restore(); // End head transform
+        ctx.restore(); // End Tom transform
+
+        // Render particles (Fire, Stars, Bubbles)
+        renderEffects(rect);
     }
 
-    if (item.y > canvas.height + 20) {
-      mgItems.splice(i, 1);
+    // Helper: Draw Eye
+    function drawEye(cx, cy, lookX, lookY, eyeState, blinking) {
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        if (blinking) {
+            ctx.strokeStyle = '#343a40';
+            ctx.lineWidth = 3.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, 18, 0.2, Math.PI - 0.2);
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
+        if (eyeState === 'happy') {
+            ctx.strokeStyle = '#2b2d42';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 4, 16, Math.PI + 0.3, Math.PI * 2 - 0.3);
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
+        if (eyeState === 'dizzy') {
+            ctx.strokeStyle = '#7209b7';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let a = 0; a < Math.PI * 4; a += 0.2) {
+                const r = a * 3;
+                const sx = Math.cos(a + Date.now() * 0.01) * r;
+                const sy = Math.sin(a + Date.now() * 0.01) * r;
+                if (a === 0) ctx.moveTo(sx, sy);
+                else ctx.lineTo(sx, sy);
+            }
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
+        // Normal Eye Sclera (White)
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 24, 28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#dee2e6';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Emerald Green Cartoon Iris
+        const lx = lookX * 8;
+        const ly = lookY * 8;
+        ctx.fillStyle = '#2ec4b6';
+        ctx.beginPath();
+        ctx.arc(lx, ly, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Deep Pupil
+        ctx.fillStyle = '#011627';
+        ctx.beginPath();
+        ctx.arc(lx, ly, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glint / Reflections
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(lx - 4, ly - 4, 4.5, 0, Math.PI * 2);
+        ctx.arc(lx + 3, ly + 3, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
-  }
 
-  mgLoop = requestAnimationFrame(runMiniGameLoop);
-}
+    // Helper: Draw Mouth
+    function drawMouth() {
+        ctx.save();
+        ctx.translate(0, -6);
 
-function endMiniGame() {
-  mgIsRunning = false;
-  cancelAnimationFrame(mgLoop);
-  SoundFX.meow(320);
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('KHEL KHATAM!', canvas.width / 2, canvas.height / 2 - 10);
-  ctx.font = '16px sans-serif';
-  ctx.fillText(`Final Score: ${mgScore} Pts`, canvas.width / 2, canvas.height / 2 + 20);
-  btnStartGame.style.display = 'block';
-  btnStartGame.innerText = 'Dobara Khelo 🎮';
-  addCoins(Math.floor(mgScore / 10));
-}
+        if (tom.mouthState === 'open' || tom.mouthState === 'talking' || tom.mouthState === 'chew') {
+            const h = Math.max(10, tom.mouthOpen * 26);
+            ctx.fillStyle = '#67102a';
+            ctx.beginPath();
+            ctx.ellipse(0, h * 0.5, 18, h, 0, 0, Math.PI * 2);
+            ctx.fill();
 
-// --- Persistence ---
-function saveProgress() {
-  try {
-    localStorage.setItem('talking_tom_state', JSON.stringify({
-      coins: State.coins,
-      level: State.level,
-      xp: State.xp,
-      hunger: State.hunger,
-      hygiene: State.hygiene,
-      energy: State.energy,
-      happy: State.happy,
-      hat: State.hat,
-      glasses: State.glasses,
-      fur: State.fur,
-      accessory: State.accessory
-    }));
-  } catch (e) {}
-}
+            // Pink Tongue
+            ctx.fillStyle = '#ff758f';
+            ctx.beginPath();
+            ctx.ellipse(0, h * 0.8, 12, h * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
 
-function loadProgress() {
-  try {
-    const saved = localStorage.getItem('talking_tom_state');
-    if (saved) {
-      const data = JSON.parse(saved);
-      Object.assign(State, data);
-      equipHat(State.hat);
-      equipGlasses(State.glasses);
-      equipFur(State.fur);
-      equipAccessory(State.accessory);
+            // Teeth
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-6, 0, 5, 5);
+            ctx.fillRect(1, 0, 5, 5);
+        } else {
+            // Smiling cat mouth
+            ctx.strokeStyle = '#343a40';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, -8);
+            ctx.lineTo(0, -2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(-10, -2, 10, 0.1, Math.PI * 0.9);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(10, -2, 10, 0.1, Math.PI * 0.9);
+            ctx.stroke();
+        }
+
+        ctx.restore();
     }
-  } catch (e) {}
-}
 
-setInterval(() => {
-  if (!State.isSleeping) {
-    State.hunger = Math.max(0, State.hunger - 0.5);
-    State.hygiene = Math.max(0, State.hygiene - 0.4);
-    State.energy = Math.max(0, State.energy - 0.6);
-    State.happy = Math.max(0, State.happy - 0.5);
-    updateHUD();
-  }
-}, 8000);
+    // Helper: Draw Hats
+    function drawHat(hat) {
+        if (!hat || hat === 'none') return;
+        ctx.save();
 
-// --- Initialization ---
-window.addEventListener('DOMContentLoaded', () => {
-  loadProgress();
-  updateHUD();
-  switchRoom('living');
-  showSpeechBubble('Namaste dost! Mai hu Tom! 😸❤️');
-});
+        if (hat === 'crown') {
+            ctx.translate(0, -95);
+            ctx.fillStyle = '#ffb703';
+            ctx.beginPath();
+            ctx.moveTo(-35, 10);
+            ctx.lineTo(-40, -30);
+            ctx.lineTo(-20, -10);
+            ctx.lineTo(0, -40);
+            ctx.lineTo(20, -10);
+            ctx.lineTo(40, -30);
+            ctx.lineTo(35, 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#fb8500';
+            ctx.stroke();
+            // Jewels
+            ctx.fillStyle = '#d90429';
+            ctx.beginPath(); ctx.arc(0, -20, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#4cc9f0';
+            ctx.beginPath(); ctx.arc(-22, -10, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(22, -10, 4, 0, Math.PI * 2); ctx.fill();
+        } else if (hat === 'party') {
+            ctx.translate(0, -100);
+            ctx.fillStyle = '#f72585';
+            ctx.beginPath();
+            ctx.moveTo(-25, 15); ctx.lineTo(0, -65); ctx.lineTo(25, 15); ctx.closePath();
+            ctx.fill();
+            // Stripes
+            ctx.strokeStyle = '#ffbe0b';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(-12, -20); ctx.lineTo(12, -20);
+            ctx.moveTo(-18, 0); ctx.lineTo(18, 0);
+            ctx.stroke();
+            // Yellow pom-pom
+            ctx.fillStyle = '#ffbe0b';
+            ctx.beginPath(); ctx.arc(0, -65, 8, 0, Math.PI * 2); ctx.fill();
+        } else if (hat === 'nightcap') {
+            ctx.translate(0, -95);
+            ctx.fillStyle = '#3a0ca3';
+            ctx.beginPath();
+            ctx.moveTo(-35, 10);
+            ctx.quadraticCurveTo(0, -70, 45, -50);
+            ctx.quadraticCurveTo(20, -20, 35, 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#ffbe0b';
+            ctx.beginPath(); ctx.arc(45, -50, 9, 0, Math.PI * 2); ctx.fill();
+        } else if (hat === 'cap') {
+            ctx.translate(0, -85);
+            ctx.fillStyle = '#4361ee';
+            ctx.beginPath();
+            ctx.arc(0, 0, 38, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = '#3a0ca3';
+            ctx.beginPath();
+            ctx.ellipse(30, 0, 32, 10, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    // Render Particle Effects
+    function renderEffects(rect) {
+        // Fire particles
+        for (let i = tom.fireParticles.length - 1; i >= 0; i--) {
+            const p = tom.fireParticles[i];
+            ctx.save();
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            p.x += p.vx;
+            p.y += p.vy;
+            p.size *= 0.95;
+            p.life--;
+            if (p.life <= 0 || p.size < 1) {
+                tom.fireParticles.splice(i, 1);
+            }
+        }
+
+        // Soap bubbles on Tom in shower
+        state.soapBubbles.forEach(b => {
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.strokeStyle = 'rgba(76, 201, 240, 0.8)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(tom.x + b.x, tom.y + b.y, b.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(tom.x + b.x - b.size * 0.3, tom.y + b.y - b.size * 0.3, b.size * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+    }
+
+    // --- MAIN GAME ANIMATION LOOP ---
+    let lastTime = performance.now();
+    function gameLoop(now) {
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+
+        // Tail sway
+        tom.tailPhase += dt * 3;
+
+        // Breathing oscillation
+        const breath = Math.sin(now * 0.003) * 0.02;
+        tom.scaleY = 1.0 + breath;
+        tom.scaleX = 1.0 - breath * 0.5;
+
+        // Eye Look interpolation towards target
+        tom.curLookX += (tom.lookTargetX - tom.curLookX) * 0.1;
+        tom.curLookY += (tom.lookTargetY - tom.curLookY) * 0.1;
+
+        // Natural Random Blinking
+        tom.blinkTimer += dt;
+        if (!tom.isBlinking && tom.blinkTimer > 3.2 + Math.random() * 2) {
+            tom.isBlinking = true;
+            tom.blinkTimer = 0;
+            setTimeout(() => { tom.isBlinking = false; }, 140);
+        }
+
+        // Talking mouth sync
+        if (tom.action === 'talking') {
+            tom.mouthOpen = 0.3 + Math.abs(Math.sin(now * 0.025)) * 0.7;
+        }
+
+        // Chewing mouth sync
+        if (tom.action === 'eat') {
+            tom.mouthOpen = Math.abs(Math.sin(now * 0.02)) * 0.8;
+        }
+
+        // Sleep state
+        if (state.isSleeping) {
+            tom.eyeState = 'sleepy';
+            tom.headAngle = 0.1;
+            if (Math.random() < 0.02) {
+                createFloatingParticle('💤', canvas.offsetLeft + canvas.offsetWidth / 2 + 40, canvas.offsetTop + 160);
+                if (window.tomAudio && Math.random() < 0.25) window.tomAudio.playSnore();
+            }
+        }
+
+        drawTom();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- USER INTERACTIONS (TOUCH & POINTER) ---
+    let isPetting = false;
+    let petMoves = 0;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+
+    canvas.addEventListener('pointerdown', (e) => {
+        window.tomAudio && window.tomAudio.init();
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+
+        lastTouchX = px;
+        lastTouchY = py;
+        isPetting = true;
+        petMoves = 0;
+
+        // If sleeping, wake up
+        if (state.isSleeping) {
+            wakeTomUp();
+            return;
+        }
+
+        // Hit Detection on Tom
+        const dx = px - rect.width / 2;
+        const dy = py - (rect.height * 0.78);
+
+        // 1. Tapped Head (Face / Ears)
+        if (dy < -130 && dy > -280 && Math.abs(dx) < 80) {
+            handleTomPoke('head');
+        }
+        // 2. Tapped Feet / Tickle
+        else if (dy > 0 && dy < 40 && Math.abs(dx) < 80) {
+            handleTomTickle();
+        }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+
+        // Follow user finger/cursor with eyes
+        tom.lookTargetX = Math.max(-1, Math.min(1, (px - rect.width / 2) / 120));
+        tom.lookTargetY = Math.max(-1, Math.min(1, (py - (rect.height * 0.5)) / 120));
+
+        if (isPetting) {
+            const dist = Math.hypot(px - lastTouchX, py - lastTouchY);
+            if (dist > 8) {
+                petMoves++;
+                lastTouchX = px;
+                lastTouchY = py;
+
+                // When rubbing/petting
+                if (petMoves > 4 && tom.action !== 'slap') {
+                    triggerPettingReaction();
+                }
+            }
+        }
+    });
+
+    window.addEventListener('pointerup', () => {
+        if (isPetting) {
+            isPetting = false;
+            if (window.tomAudio) window.tomAudio.stopPurr();
+            if (tom.action === 'pet') {
+                tom.action = 'idle';
+                tom.eyeState = 'normal';
+                tom.mouthState = 'smile';
+                tom.mouthOpen = 0;
+            }
+        }
+    });
+
+    // 1. Petting Reaction (Purr, smile, hearts)
+    function triggerPettingReaction() {
+        tom.action = 'pet';
+        tom.eyeState = 'happy';
+        tom.mouthState = 'smile';
+        tom.headAngle = Math.sin(Date.now() * 0.005) * 0.08;
+
+        if (window.tomAudio) window.tomAudio.startPurr();
+
+        state.happiness = Math.min(100, state.happiness + 0.3);
+        saveState();
+
+        if (Math.random() < 0.15) {
+            createFloatingParticle('💖', canvas.offsetLeft + tom.x + (Math.random() * 60 - 30), canvas.offsetTop + 180);
+        }
+    }
+
+    // 2. Poke / Slap Reaction (Stumble, dizzy stars, squeak)
+    function handleTomPoke(target) {
+        if (tom.action === 'slap') return;
+        tom.action = 'slap';
+        tom.eyeState = 'dizzy';
+        tom.mouthState = 'open';
+        tom.mouthOpen = 0.8;
+        tom.rotation = 0.15;
+        tom.headAngle = -0.2;
+
+        if (window.tomAudio) window.tomAudio.playSlap();
+
+        createFloatingParticle('⭐', canvas.offsetLeft + tom.x - 30, canvas.offsetTop + 140);
+        createFloatingParticle('✨', canvas.offsetLeft + tom.x + 30, canvas.offsetTop + 130);
+
+        showSpeech('Arey baap re! 😵', 1500);
+
+        setTimeout(() => {
+            tom.rotation = -0.1;
+        }, 120);
+
+        setTimeout(() => {
+            tom.rotation = 0;
+            tom.headAngle = 0;
+            tom.eyeState = 'normal';
+            tom.mouthState = 'smile';
+            tom.mouthOpen = 0;
+            tom.action = 'idle';
+        }, 1100);
+    }
+
+    // 3. Tickle Reaction (Giggle)
+    function handleTomTickle() {
+        tom.action = 'pet';
+        tom.eyeState = 'happy';
+        tom.mouthState = 'open';
+        tom.mouthOpen = 0.6;
+        tom.scaleY = 1.15;
+
+        if (window.tomAudio) window.tomAudio.playGiggle();
+        showSpeech('Hahaha gudgudi ho rahi hai! 😂', 1500);
+
+        setTimeout(() => {
+            tom.scaleY = 1.0;
+            tom.eyeState = 'normal';
+            tom.mouthState = 'smile';
+            tom.mouthOpen = 0;
+            tom.action = 'idle';
+        }, 1200);
+    }
+
+    // --- ROOM SWITCHING SYSTEM ---
+    const navTabs = document.querySelectorAll('.nav-tab');
+    navTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const room = tab.dataset.room;
+            switchRoom(room);
+        });
+    });
+
+    function switchRoom(room) {
+        state.currentRoom = room;
+        navTabs.forEach(t => t.classList.toggle('active', t.dataset.room === room));
+
+        // Switch Stage background theme
+        stage.className = 'room-' + room;
+
+        // Toggle drawers/trays
+        document.getElementById('kitchen-tray').classList.toggle('hidden', room !== 'kitchen');
+        document.getElementById('bathroom-tray').classList.toggle('hidden', room !== 'bathroom');
+        document.getElementById('doctor-tray').classList.toggle('hidden', room !== 'doctor');
+        document.getElementById('talk-bar').classList.toggle('hidden', room !== 'living');
+        document.getElementById('quick-phrases').classList.toggle('hidden', room !== 'living');
+        document.getElementById('pet-companion').style.display = room === 'living' ? 'block' : 'none';
+
+        // Bedroom lamp
+        const lamp = document.getElementById('lamp-toggle');
+        if (lamp) lamp.style.display = room === 'bedroom' ? 'block' : 'none';
+
+        // Shower controls in bathroom
+        const showerHead = document.getElementById('shower-head');
+        if (showerHead) showerHead.style.display = room === 'bathroom' ? 'block' : 'none';
+
+        if (window.tomAudio) window.tomAudio.playMeow(1.2);
+    }
+
+    // --- KITCHEN: FOOD & FEEDING MECHANICS ---
+    const foodItems = document.querySelectorAll('.food-item');
+    foodItems.forEach(item => {
+        item.addEventListener('click', () => {
+            feedTom(item.dataset.food);
+        });
+    });
+
+    function feedTom(foodType) {
+        if (tom.action === 'eat') return;
+        tom.action = 'eat';
+        tom.eyeState = 'happy';
+        tom.mouthState = 'open';
+
+        if (window.tomAudio) {
+            window.tomAudio.playMunch();
+            setTimeout(() => window.tomAudio.playMunch(), 200);
+            setTimeout(() => window.tomAudio.playMunch(), 400);
+            setTimeout(() => window.tomAudio.playGulpAndBurp(), 650);
+        }
+
+        // Special Chili Event! 🔥🌶️
+        if (foodType === 'chili') {
+            setTimeout(() => {
+                triggerChiliReaction();
+            }, 750);
+            return;
+        }
+
+        // Normal Food
+        state.hunger = Math.min(100, state.hunger + 25);
+        state.coins += 2;
+        saveState();
+
+        createFloatingParticle('😋', canvas.offsetLeft + tom.x, canvas.offsetTop + 180);
+        showSpeech('Maza aa gaya! Yammi! 🤤', 2000);
+
+        setTimeout(() => {
+            tom.action = 'idle';
+            tom.eyeState = 'normal';
+            tom.mouthState = 'smile';
+            tom.mouthOpen = 0;
+        }, 1200);
+    }
+
+    function triggerChiliReaction() {
+        tom.eyeState = 'dizzy';
+        tom.mouthState = 'open';
+        tom.mouthOpen = 1.0;
+        showSpeech('AAG LAG GAYI! MIRCHI!! 🌶️🔥', 2500);
+
+        if (window.tomAudio) window.tomAudio.playFireBreath();
+
+        for (let i = 0; i < 40; i++) {
+            tom.fireParticles.push({
+                x: tom.x,
+                y: tom.y - 190,
+                vx: (Math.random() - 0.5) * 8,
+                vy: -Math.random() * 12 - 2,
+                size: 15 + Math.random() * 20,
+                color: Math.random() < 0.5 ? '#ff4d6d' : '#ffbe0b',
+                life: 35
+            });
+        }
+
+        setTimeout(() => {
+            tom.action = 'idle';
+            tom.eyeState = 'normal';
+            tom.mouthState = 'smile';
+            tom.mouthOpen = 0;
+        }, 2200);
+    }
+
+    // --- BATHROOM: TOILET & SHOWER ---
+    const toiletBtn = document.getElementById('btn-toilet');
+    if (toiletBtn) {
+        toiletBtn.addEventListener('click', () => {
+            tom.action = 'toilet';
+            tom.eyeState = 'dizzy';
+            showSpeech('Pooo... Fart! 💨🚽', 2000);
+
+            if (window.tomAudio) {
+                window.tomAudio.playFart();
+                setTimeout(() => window.tomAudio.playFlush(), 450);
+            }
+
+            state.toilet = 0;
+            state.coins += 5;
+            saveState();
+
+            createFloatingParticle('💨', canvas.offsetLeft + tom.x, canvas.offsetTop + 280);
+
+            setTimeout(() => {
+                tom.action = 'idle';
+                tom.eyeState = 'happy';
+                showSpeech('Aaha! Kitna halka feel ho raha hai! 😌', 2000);
+                setTimeout(() => {
+                    tom.eyeState = 'normal';
+                }, 1500);
+            }, 1800);
+        });
+    }
+
+    // Shower Soap & Water
+    const soapBtn = document.getElementById('btn-soap');
+    if (soapBtn) {
+        soapBtn.addEventListener('click', () => {
+            for (let i = 0; i < 8; i++) {
+                state.soapBubbles.push({
+                    x: (Math.random() - 0.5) * 120,
+                    y: -80 - Math.random() * 140,
+                    size: 8 + Math.random() * 14
+                });
+            }
+            if (window.tomAudio) window.tomAudio.playBubblePop();
+            createFloatingParticle('🫧', canvas.offsetLeft + tom.x, canvas.offsetTop + 220);
+        });
+    }
+
+    const showerHead = document.getElementById('shower-head');
+    const showerWater = document.getElementById('shower-water');
+    if (showerHead) {
+        showerHead.addEventListener('click', () => {
+            showerWater.classList.add('spraying');
+            if (window.tomAudio) window.tomAudio.playWaterSpray();
+
+            setTimeout(() => {
+                state.soapBubbles = [];
+                showerWater.classList.remove('spraying');
+                state.hygiene = 100;
+                state.coins += 5;
+                saveState();
+
+                createFloatingParticle('✨', canvas.offsetLeft + tom.x, canvas.offsetTop + 180);
+                if (window.tomAudio) window.tomAudio.playCureSparkle();
+                showSpeech('Tom ekdum saaf aur chamakdar ho gaya! 🧼', 2200);
+            }, 1200);
+        });
+    }
+
+    // --- BEDROOM: SLEEP & LAMP ---
+    const lampToggle = document.getElementById('lamp-toggle');
+    if (lampToggle) {
+        lampToggle.addEventListener('click', () => {
+            if (state.isSleeping) {
+                wakeTomUp();
+            } else {
+                putTomToSleep();
+            }
+        });
+    }
+
+    function putTomToSleep() {
+        state.isSleeping = true;
+        stage.classList.add('dark-mode');
+        lampToggle.textContent = '🌙';
+        tom.action = 'sleep';
+        state.equipped.hat = 'nightcap';
+        showSpeech('Shhh... Tom so raha hai! Good night! 😴', 2000);
+        if (window.tomAudio) window.tomAudio.playSnore();
+    }
+
+    function wakeTomUp() {
+        state.isSleeping = false;
+        stage.classList.remove('dark-mode');
+        lampToggle.textContent = '💡';
+        tom.action = 'idle';
+        tom.eyeState = 'normal';
+        state.equipped.hat = 'none';
+        state.energy = 100;
+        state.coins += 10;
+        saveState();
+
+        if (window.tomAudio) window.tomAudio.playMeow(1.3);
+        showSpeech('Suprabhat! Full energy aa gayi! ⚡', 2000);
+    }
+
+    // --- DOCTOR CLINIC (MY TALKING TOM 2 FIRST AID) ---
+    const doctorTools = document.querySelectorAll('.tool-item');
+    doctorTools.forEach(tool => {
+        tool.addEventListener('click', () => {
+            const t = tool.dataset.tool;
+            handleDoctorTool(t);
+        });
+    });
+
+    function handleDoctorTool(tool) {
+        if (tool === 'syringe') {
+            tom.eyeState = 'dizzy';
+            tom.scaleY = 1.2;
+            if (window.tomAudio) window.tomAudio.playSlap();
+            showSpeech('Ouch! Injection laga diya! 💉😭', 1800);
+            setTimeout(() => {
+                tom.scaleY = 1.0;
+                cureTom();
+            }, 1000);
+        } else if (tool === 'potion') {
+            if (window.tomAudio) window.tomAudio.playGulpAndBurp();
+            cureTom();
+        } else if (tool === 'bandage') {
+            cureTom();
+        }
+    }
+
+    function cureTom() {
+        state.isSick = false;
+        state.happiness = 100;
+        state.coins += 15;
+        saveState();
+
+        if (window.tomAudio) window.tomAudio.playCureSparkle();
+        createFloatingParticle('💖', canvas.offsetLeft + tom.x, canvas.offsetTop + 160);
+        createFloatingParticle('✨', canvas.offsetLeft + tom.x + 30, canvas.offsetTop + 180);
+
+        showSpeech('Wah! Tom bilkul theek aur tandurust ho gaya! 🩺✨', 2500);
+    }
+
+    // --- VOICE MIMIC & TALKING ENGINE ---
+    const micBtn = document.getElementById('mic-btn');
+    const talkInput = document.getElementById('talk-input');
+    const sendSpeechBtn = document.getElementById('send-speech-btn');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'hi-IN';
+
+        recognition.onstart = () => {
+            micBtn.classList.add('listening');
+            tom.action = 'listening';
+            showSpeech('Sun raha hoon... bolo! 👂', 3000);
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            micBtn.classList.remove('listening');
+            talkInput.value = transcript;
+            tomSpeak(transcript);
+        };
+
+        recognition.onerror = () => {
+            micBtn.classList.remove('listening');
+            tom.action = 'idle';
+            showSpeech('Aawaz nahi suni, dubara kaho ya likho!', 2000);
+        };
+
+        recognition.onend = () => {
+            micBtn.classList.remove('listening');
+            if (tom.action === 'listening') tom.action = 'idle';
+        };
+    }
+
+    if (micBtn) {
+        micBtn.addEventListener('click', () => {
+            if (recognition) {
+                try {
+                    recognition.start();
+                } catch(e) {
+                    recognition.stop();
+                }
+            } else {
+                showSpeech('Mic enable nahi hai, niche likh kar Tom ko bolo! ✍️', 2500);
+            }
+        });
+    }
+
+    function tomSpeak(text) {
+        if (!text) return;
+        tom.action = 'talking';
+        tom.eyeState = 'happy';
+        showSpeech(text, 3500);
+
+        if (window.tomAudio) {
+            window.tomAudio.speakTomVoice(text, 
+                () => { tom.action = 'talking'; }, 
+                () => { 
+                    tom.action = 'idle';
+                    tom.eyeState = 'normal';
+                    tom.mouthState = 'smile';
+                    tom.mouthOpen = 0;
+                }
+            );
+        }
+    }
+
+    if (sendSpeechBtn) {
+        sendSpeechBtn.addEventListener('click', () => {
+            const txt = talkInput.value.trim();
+            if (txt) {
+                tomSpeak(txt);
+                talkInput.value = '';
+            }
+        });
+    }
+
+    if (talkInput) {
+        talkInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const txt = talkInput.value.trim();
+                if (txt) {
+                    tomSpeak(txt);
+                    talkInput.value = '';
+                }
+            }
+        });
+    }
+
+    // Quick Phrases
+    const quickPhrases = document.querySelectorAll('.phrase-pill');
+    quickPhrases.forEach(p => {
+        p.addEventListener('click', () => {
+            tomSpeak(p.dataset.phrase);
+        });
+    });
+
+    // Pet Companion (Squeezer)
+    const petCompanion = document.getElementById('pet-companion');
+    if (petCompanion) {
+        petCompanion.addEventListener('click', () => {
+            if (window.tomAudio) window.tomAudio.playGiggle();
+            createFloatingParticle('⭐', petCompanion.offsetLeft + 20, petCompanion.offsetTop - 20);
+            showSpeech('Tom ka pyara dost Squeezer! 🐹💖', 1800);
+        });
+    }
+
+    // --- WARDROBE & COSTUME SHOP MODAL ---
+    const shopModal = document.getElementById('shop-modal');
+    const openShopBtn = document.getElementById('btn-open-shop');
+    const closeShopBtn = document.getElementById('btn-close-shop');
+    const shopGrid = document.getElementById('shop-grid');
+
+    const shopCatalog = [
+        { id: 'hat_crown', type: 'hat', val: 'crown', name: 'Shahi Crown 👑', price: 50 },
+        { id: 'hat_party', type: 'hat', val: 'party', name: 'Party Hat 🥳', price: 30 },
+        { id: 'hat_cap', type: 'hat', val: 'cap', name: 'Cool Cap 🧢', price: 40 },
+        { id: 'shades', type: 'glasses', val: 'cool_shades', name: 'Kala Chashma 🕶️', price: 60 },
+        { id: 'bowtie', type: 'neck', val: 'red_bowtie', name: 'Red Bowtie 🎀', price: 35 },
+        { id: 'fur_ginger', type: 'fur', val: '#f4a261', name: 'Ginger Fur 🐱', price: 80 },
+        { id: 'fur_black', type: 'fur', val: '#2b2d42', name: 'Black Panther 🐾', price: 90 },
+        { id: 'fur_white', type: 'fur', val: '#e9ecef', name: 'White Snow ❄️', price: 80 },
+        { id: 'reset_style', type: 'reset', val: 'reset', name: 'Default Look 🔄', price: 0 }
+    ];
+
+    function renderShop() {
+        if (!shopGrid) return;
+        shopGrid.innerHTML = '';
+        shopCatalog.forEach(item => {
+            const isOwned = state.unlockedItems.includes(item.val) || item.price === 0;
+            const isEquipped = state.equipped[item.type] === item.val;
+
+            const card = document.createElement('div');
+            card.className = 'shop-item-card' + (isEquipped ? ' equipped' : '');
+            card.innerHTML = `
+                <div class="shop-item-icon">${item.name.split(' ').pop()}</div>
+                <div class="shop-item-name">${item.name}</div>
+                <button class="shop-item-btn ${isEquipped ? 'active' : isOwned ? 'owned' : ''}">
+                    ${isEquipped ? 'Equipped' : isOwned ? 'Wear' : '🪙 ' + item.price}
+                </button>
+            `;
+
+            card.addEventListener('click', () => {
+                if (item.type === 'reset') {
+                    state.equipped.hat = 'none';
+                    state.equipped.glasses = 'none';
+                    state.equipped.neck = 'none';
+                    state.equipped.fur = '#8e9aaf';
+                    saveState();
+                    renderShop();
+                    return;
+                }
+
+                if (isOwned) {
+                    state.equipped[item.type] = (state.equipped[item.type] === item.val) ? 'none' : item.val;
+                } else if (state.coins >= item.price) {
+                    state.coins -= item.price;
+                    state.unlockedItems.push(item.val);
+                    state.equipped[item.type] = item.val;
+                    if (window.tomAudio) window.tomAudio.playCoin();
+                } else {
+                    showSpeech('Coins kam hain! Mini-game khelo! 🪙', 2000);
+                    return;
+                }
+                saveState();
+                renderShop();
+            });
+
+            shopGrid.appendChild(card);
+        });
+    }
+
+    if (openShopBtn) openShopBtn.addEventListener('click', () => { renderShop(); shopModal.classList.add('open'); });
+    if (closeShopBtn) closeShopBtn.addEventListener('click', () => shopModal.classList.remove('open'));
+
+    // --- ARCADE MINI-GAME: "TOM'S SNACK CATCHER" ---
+    const minigameModal = document.getElementById('minigame-modal');
+    const openGameBtn = document.getElementById('btn-open-game');
+    const closeGameBtn = document.getElementById('btn-close-game');
+    const mgCanvas = document.getElementById('minigame-canvas');
+    let mgCtx = null;
+    let mgActive = false;
+    let mgScore = 0;
+    let mgBasketX = 140;
+    let mgSnacks = [];
+    let mgAnimationId = null;
+
+    if (mgCanvas) {
+        mgCtx = mgCanvas.getContext('2d');
+    }
+
+    function startMiniGame() {
+        mgActive = true;
+        mgScore = 0;
+        mgSnacks = [];
+        mgBasketX = mgCanvas.width / 2;
+        minigameModal.classList.add('open');
+        lastSpawnTime = performance.now();
+        miniGameLoop();
+    }
+
+    function stopMiniGame() {
+        mgActive = false;
+        cancelAnimationFrame(mgAnimationId);
+        minigameModal.classList.remove('open');
+    }
+
+    let lastSpawnTime = 0;
+    function miniGameLoop() {
+        if (!mgActive) return;
+        const now = performance.now();
+
+        mgCtx.clearRect(0, 0, mgCanvas.width, mgCanvas.height);
+
+        if (now - lastSpawnTime > 750) {
+            lastSpawnTime = now;
+            const isBomb = Math.random() < 0.2;
+            mgSnacks.push({
+                x: 20 + Math.random() * (mgCanvas.width - 40),
+                y: -20,
+                speed: 2.5 + Math.random() * 2,
+                type: isBomb ? '💣' : ['🐟', '🍔', '🍼', '🍰'][Math.floor(Math.random() * 4)],
+                isBomb: isBomb
+            });
+        }
+
+        for (let i = mgSnacks.length - 1; i >= 0; i--) {
+            const s = mgSnacks[i];
+            s.y += s.speed;
+
+            mgCtx.font = '28px Arial';
+            mgCtx.fillText(s.type, s.x, s.y);
+
+            if (s.y > mgCanvas.height - 45 && s.y < mgCanvas.height - 10 && Math.abs(s.x - mgBasketX) < 35) {
+                if (s.isBomb) {
+                    if (window.tomAudio) window.tomAudio.playSlap();
+                    alert('Boom! Bomb phoot gaya! Final Score: ' + mgScore);
+                    state.coins += Math.floor(mgScore / 2);
+                    saveState();
+                    stopMiniGame();
+                    return;
+                } else {
+                    mgScore += 10;
+                    if (window.tomAudio) window.tomAudio.playCoin();
+                    mgSnacks.splice(i, 1);
+                    continue;
+                }
+            }
+
+            if (s.y > mgCanvas.height) {
+                mgSnacks.splice(i, 1);
+            }
+        }
+
+        // Draw Player Catcher Bowl
+        mgCtx.fillStyle = '#ffb703';
+        mgCtx.beginPath();
+        mgCtx.ellipse(mgBasketX, mgCanvas.height - 25, 35, 14, 0, 0, Math.PI);
+        mgCtx.fill();
+        mgCtx.fillStyle = '#e63946';
+        mgCtx.font = '20px Arial';
+        mgCtx.fillText('🐱', mgBasketX - 10, mgCanvas.height - 18);
+
+        // Draw Score UI
+        mgCtx.fillStyle = '#ffffff';
+        mgCtx.font = 'bold 18px Nunito, sans-serif';
+        mgCtx.fillText('Score: ' + mgScore, 14, 30);
+
+        mgAnimationId = requestAnimationFrame(miniGameLoop);
+    }
+
+    if (openGameBtn) openGameBtn.addEventListener('click', startMiniGame);
+    if (closeGameBtn) closeGameBtn.addEventListener('click', stopMiniGame);
+
+    const btnLeft = document.getElementById('mg-btn-left');
+    const btnRight = document.getElementById('mg-btn-right');
+    if (btnLeft) {
+        btnLeft.addEventListener('pointerdown', () => { mgBasketX = Math.max(35, mgBasketX - 45); });
+    }
+    if (btnRight) {
+        btnRight.addEventListener('pointerdown', () => { mgBasketX = Math.min(mgCanvas.width - 35, mgBasketX + 45); });
+    }
+
+    if (mgCanvas) {
+        mgCanvas.addEventListener('pointermove', (e) => {
+            const rect = mgCanvas.getBoundingClientRect();
+            mgBasketX = Math.max(35, Math.min(mgCanvas.width - 35, e.clientX - rect.left));
+        });
+    }
+
+    // Fullscreen Toggle
+    const fullscreenBtn = document.getElementById('btn-fullscreen');
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        });
+    }
+
+    // Sound Toggle
+    const soundBtn = document.getElementById('btn-sound');
+    if (soundBtn) {
+        soundBtn.addEventListener('click', () => {
+            if (window.tomAudio) {
+                const muted = window.tomAudio.toggleMute();
+                soundBtn.textContent = muted ? '🔇' : '🔊';
+            }
+        });
+    }
+
+    // Natural Need Degradation Over Time
+    setInterval(() => {
+        if (!state.isSleeping) {
+            state.hunger = Math.max(0, state.hunger - 1);
+            state.energy = Math.max(0, state.energy - 0.5);
+            state.toilet = Math.min(100, state.toilet + 1);
+            state.hygiene = Math.max(0, state.hygiene - 0.5);
+            saveState();
+        }
+    }, 15000);
+
+    // Initial Setup
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    updateMetersUI();
+    switchRoom('living');
+    requestAnimationFrame(gameLoop);
+
+    // Welcome greeting
+    setTimeout(() => {
+        showSpeech('Namaste! Main hoon Tom! Mere sath khelo! 😸💖', 3000);
+        if (window.tomAudio) window.tomAudio.playMeow(1.2);
+    }, 600);
+
+})();

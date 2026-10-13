@@ -11,6 +11,7 @@ import com.omni.assistant.data.AttachmentEntity
 import com.omni.assistant.data.AttachmentRules
 import com.omni.assistant.data.ConversationEntity
 import com.omni.assistant.data.DraftAttachment
+import com.omni.assistant.data.FileExport
 import com.omni.assistant.data.MessageEntity
 import com.omni.assistant.net.ApiException
 import com.omni.assistant.net.ApiPart
@@ -29,8 +30,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 data class ChatUi(
     val streaming: Boolean = false,
@@ -40,7 +43,21 @@ data class ChatUi(
     val listening: Boolean = false,
     val speaking: Boolean = false,
     val importing: Boolean = false,
-    val notice: String? = null
+    val notice: String? = null,
+    val activeFile: FileExport.LiveFileInfo? = null,
+    val completedFiles: List<FileExport.LiveFileInfo> = emptyList(),
+    val thinking: String? = null
+)
+
+data class ConversationTask(
+    val cid: Long,
+    val streaming: Boolean = true,
+    val partial: String = "",
+    val status: String? = null,
+    val activeFile: FileExport.LiveFileInfo? = null,
+    val completedFiles: List<FileExport.LiveFileInfo> = emptyList(),
+    val thinking: String? = null,
+    val error: String? = null
 )
 
 enum class ChatMode { CHAT, IMAGE, VIDEO }
@@ -71,8 +88,34 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         list.firstOrNull { it.id == id }?.title ?: "New chat"
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "New chat")
 
-    private val _ui = MutableStateFlow(ChatUi())
-    val ui: StateFlow<ChatUi> = _ui.asStateFlow()
+    // Concurrent multi-chat background task registry
+    private val runningJobs = ConcurrentHashMap<Long, Job>()
+    private val activeTasks = MutableStateFlow<Map<Long, ConversationTask>>(emptyMap())
+
+    private val _uiBase = MutableStateFlow(ChatUi())
+    val ui: StateFlow<ChatUi> = combine(_uiBase, _conversationId, activeTasks) { base, cid, tasks ->
+        val task = if (cid != null) tasks[cid] else null
+        if (task != null && task.streaming) {
+            base.copy(
+                streaming = true,
+                partial = task.partial,
+                status = task.status,
+                activeFile = task.activeFile,
+                completedFiles = task.completedFiles,
+                thinking = task.thinking,
+                error = task.error ?: base.error
+            )
+        } else {
+            base.copy(
+                streaming = false,
+                partial = "",
+                status = null,
+                activeFile = null,
+                completedFiles = emptyList(),
+                thinking = null
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatUi())
 
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
@@ -86,8 +129,6 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     /** Failed generation messages -> the mode that produced them, so Retry repeats the right request. */
     private val failedModes = HashMap<Long, ChatMode>()
 
-    private var job: Job? = null
-
     init {
         store.clearCameraCache()
     }
@@ -97,7 +138,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setMode(m: ChatMode) {
-        if (_ui.value.streaming) return
+        val active = _conversationId.value?.let { activeTasks.value[it]?.streaming } == true
+        if (active) return
         if (m != ChatMode.CHAT && _pending.value.isNotEmpty()) {
             notify("Attachments are only used in Chat mode, so they were kept for later.")
         }
@@ -105,11 +147,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissMessages() {
-        _ui.update { it.copy(error = null, notice = null) }
+        _uiBase.update { it.copy(error = null, notice = null) }
     }
 
     fun notify(message: String) {
-        _ui.update { it.copy(notice = message) }
+        _uiBase.update { it.copy(notice = message) }
     }
 
     // ---- Attachments ----------------------------------------------------------------------
@@ -117,7 +159,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun addAttachments(uris: List<Uri>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
-            _ui.update { it.copy(importing = true) }
+            _uiBase.update { it.copy(importing = true) }
             for (uri in uris) {
                 if (_pending.value.size >= AttachmentRules.MAX_ATTACHMENTS_PER_MESSAGE) {
                     notify("You can attach up to ${AttachmentRules.MAX_ATTACHMENTS_PER_MESSAGE} items per message.")
@@ -134,7 +176,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     notify("Couldn't attach that item.")
                 }
             }
-            _ui.update { it.copy(importing = false) }
+            _uiBase.update { it.copy(importing = false) }
         }
     }
 
@@ -150,26 +192,27 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         items.forEach { store.delete(it) }
     }
 
-    // ---- Conversations --------------------------------------------------------------------
+    // ---- Conversations (Multi-chat background safe) ---------------------------------------
 
     fun newChat() {
-        cancel()
+        // Do NOT cancel background jobs - previous chat work continues running!
         discardPending()
         _conversationId.value = null
         _draft.value = ""
-        _ui.update { it.copy(error = null, notice = null) }
+        _uiBase.update { it.copy(error = null, notice = null) }
     }
 
     fun openConversation(id: Long) {
-        cancel()
+        // Switching conversation keeps previous conversation streaming safely in background!
         _conversationId.value = id
-        _ui.update { it.copy(error = null, notice = null) }
+        _uiBase.update { it.copy(error = null, notice = null) }
     }
 
     fun deleteConversation(id: Long) {
         viewModelScope.launch {
+            runningJobs.remove(id)?.cancel()
+            activeTasks.update { it - id }
             if (_conversationId.value == id) {
-                cancel()
                 _conversationId.value = null
             }
             val files = dao.getAttachments(id)
@@ -186,7 +229,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteAllConversations() {
         viewModelScope.launch {
-            cancel()
+            runningJobs.forEach { (_, job) -> job.cancel() }
+            runningJobs.clear()
+            activeTasks.value = emptyMap()
             _conversationId.value = null
             val files = dao.getAllAttachments()
             dao.deleteAll()
@@ -201,24 +246,26 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (send(text)) _draft.value = ""
     }
 
-    /** Returns true if the message was accepted. Sends the pending attachments along with it. */
+    /** Returns true if the message was accepted. Runs on Application scope so tasks survive navigation! */
     fun send(raw: String): Boolean {
         val text = raw.trim()
         val mode = _mode.value
         val attached = if (mode == ChatMode.CHAT) _pending.value else emptyList()
-        if ((text.isEmpty() && attached.isEmpty()) || _ui.value.streaming || _ui.value.importing) return false
+        if ((text.isEmpty() && attached.isEmpty()) || _uiBase.value.importing) return false
         val cfg = omni.settings.current
         if (cfg.baseUrl.isBlank() || (mode == ChatMode.CHAT && cfg.model.isBlank())) {
-            _ui.update { it.copy(error = "Set the base URL and a model in Settings first.") }
+            _uiBase.update { it.copy(error = "Set the base URL and a model in Settings first.") }
             return false
         }
         if (mode == ChatMode.IMAGE && text.isEmpty()) return false
         omni.voice.stopSpeaking()
         if (mode == ChatMode.CHAT) _pending.value = emptyList()
-        _ui.update { it.copy(streaming = true, partial = "", error = null, notice = null, speaking = false) }
-        job = omni.appScope.launch {
-            val now = System.currentTimeMillis()
-            var cid = _conversationId.value
+
+        val now = System.currentTimeMillis()
+        var cid = _conversationId.value
+
+        // Application scope survives ViewModel / Activity lifecycle!
+        omni.appScope.launch {
             if (cid == null) {
                 val titleSource = if (text.isNotEmpty()) text else attached.first().name
                 cid = dao.insertConversation(
@@ -226,8 +273,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 _conversationId.value = cid
             }
+            val targetCid = cid ?: return@launch
             val messageId = dao.insertMessage(
-                MessageEntity(conversationId = cid, role = "user", content = text, createdAt = now)
+                MessageEntity(conversationId = targetCid, role = "user", content = text, createdAt = now)
             )
             if (attached.isNotEmpty()) {
                 dao.insertAttachments(
@@ -239,17 +287,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 )
             }
-            dao.touch(cid, now)
-            if (mode == ChatMode.CHAT) runGeneration(cid) else runMedia(cid, text, mode)
+            dao.touch(targetCid, now)
+            if (mode == ChatMode.CHAT) runGeneration(targetCid) else runMedia(targetCid, text, mode)
         }
         return true
     }
 
     fun retry(failedMessageId: Long) {
         val cid = _conversationId.value ?: return
-        if (_ui.value.streaming) return
-        _ui.update { it.copy(streaming = true, partial = "", error = null, notice = null) }
-        job = omni.appScope.launch {
+        if (activeTasks.value[cid]?.streaming == true) return
+        omni.appScope.launch {
             dao.deleteMessage(failedMessageId)
             val m = failedModes.remove(failedMessageId) ?: ChatMode.CHAT
             if (m == ChatMode.CHAT) {
@@ -263,8 +310,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Image / video generation: one request, results saved privately and attached to the reply. */
     private suspend fun runMedia(cid: Long, prompt: String, mode: ChatMode) {
-        _ui.update { it.copy(streaming = true, partial = "", error = null) }
+        runningJobs[cid] = coroutineContext.job
         val kindWord = if (mode == ChatMode.IMAGE) "image" else "video"
+        activeTasks.update {
+            it + (cid to ConversationTask(
+                cid = cid,
+                streaming = true,
+                status = "Generating $kindWord with AI..."
+            ))
+        }
         val files = ArrayList<DraftAttachment>()
         try {
             val items = if (mode == ChatMode.IMAGE) omni.client.requestImages(prompt) else omni.client.requestVideo(prompt)
@@ -307,11 +361,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 }
             )
             dao.touch(cid, now)
-            _ui.update { it.copy(streaming = false) }
             omni.connection.markOk()
         } catch (e: CancellationException) {
             files.forEach { store.delete(it) }
-            withContext(NonCancellable) { _ui.update { it.copy(streaming = false, partial = "") } }
             throw e
         } catch (e: Exception) {
             files.forEach { store.delete(it) }
@@ -324,16 +376,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 )
             )
             failedModes[id] = mode
-            _ui.update { it.copy(streaming = false, partial = "") }
             if (api.kind == ApiException.Kind.NETWORK || api.kind == ApiException.Kind.AUTH) {
                 omni.connection.markFailed(api.message.orEmpty())
             }
+        } finally {
+            runningJobs.remove(cid)
+            activeTasks.update { it - cid }
         }
     }
 
+    /** Explicitly cancels only the active chat being viewed. */
     fun cancel() {
-        job?.cancel()
-        job = null
+        val cid = _conversationId.value ?: return
+        runningJobs.remove(cid)?.cancel()
+        activeTasks.update { it - cid }
     }
 
     private suspend fun buildHistory(cid: Long): Pair<List<ChatTurn>, Boolean> {
@@ -375,7 +431,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun runGeneration(cid: Long) {
-        _ui.update { it.copy(streaming = true, partial = "", status = "🧠 Thinking & planning project...", error = null) }
+        runningJobs[cid] = coroutineContext.job
+        activeTasks.update {
+            it + (cid to ConversationTask(
+                cid = cid,
+                streaming = true,
+                status = "🧠 Thinking & planning project architecture..."
+            ))
+        }
         val sb = StringBuilder()
         var hadParts = false
         var lastEmitTime = 0L
@@ -385,19 +448,28 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             omni.client.streamChat(history).collect { chunk ->
                 sb.append(chunk)
                 val now = System.currentTimeMillis()
-                // Throttle UI emissions to max once per 120ms to eliminate GC pauses & UI thread pegging
-                if (now - lastEmitTime >= 120 || sb.length < 200) {
+                // Throttled UI state updates to prevent CPU starvation
+                if (now - lastEmitTime >= 100 || sb.length < 200) {
                     lastEmitTime = now
                     val currentText = sb.toString()
-                    val liveStatus = extractLiveStatus(currentText)
-                    _ui.update { it.copy(partial = currentText, status = liveStatus) }
+                    val progress = FileExport.parseStreamingProgress(currentText)
+                    activeTasks.update { map ->
+                        map + (cid to ConversationTask(
+                            cid = cid,
+                            streaming = true,
+                            partial = currentText,
+                            status = progress.stageSummary,
+                            activeFile = progress.activeFile,
+                            completedFiles = progress.completedFiles,
+                            thinking = progress.thinking
+                        ))
+                    }
                 }
             }
             val finalText = sb.toString()
             val now = System.currentTimeMillis()
             dao.insertMessage(MessageEntity(conversationId = cid, role = "assistant", content = finalText, createdAt = now))
             dao.touch(cid, now)
-            _ui.update { it.copy(streaming = false, partial = "", status = null) }
             omni.connection.markOk()
             if (omni.settings.current.speakReplies) speak(finalText)
         } catch (e: CancellationException) {
@@ -409,45 +481,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     dao.touch(cid, now)
                 }
-                _ui.update { it.copy(streaming = false, partial = "", status = null) }
             }
             throw e
         } catch (e: ApiException) {
             fail(cid, sb.toString(), e, hadParts)
         } catch (e: Exception) {
             fail(cid, sb.toString(), ApiException(ApiException.Kind.CLIENT, "Unexpected error (${e.javaClass.simpleName})."), hadParts)
-        }
-    }
-
-    private fun extractLiveStatus(text: String): String {
-        if (text.isBlank()) return "🧠 Thinking & planning project..."
-        val lastLines = text.takeLast(1500).lines().filter { it.isNotBlank() }
-        for (line in lastLines.reversed()) {
-            val l = line.trim()
-            when {
-                l.contains("index.html", ignoreCase = true) -> return "🌐 Building HTML structure (index.html)..."
-                l.contains("game.js", ignoreCase = true) || l.contains("script.js", ignoreCase = true) -> return "⚡ Writing interactive game logic..."
-                l.contains("style.css", ignoreCase = true) -> return "🎨 Styling & animations (style.css)..."
-                l.contains("```html", ignoreCase = true) -> return "📄 Creating HTML structure..."
-                l.contains("```javascript", ignoreCase = true) || l.contains("```js", ignoreCase = true) -> return "⚡ Writing JavaScript code..."
-                l.contains("```css", ignoreCase = true) -> return "🎨 Applying CSS styles & layout..."
-                l.contains("```kotlin", ignoreCase = true) || l.contains("```kt", ignoreCase = true) -> return "📱 Writing Kotlin code..."
-                l.contains("```python", ignoreCase = true) || l.contains("```py", ignoreCase = true) -> return "🐍 Writing Python code..."
-                l.contains("```", ignoreCase = true) -> return "✏️ Writing code files..."
-                l.contains("audio", ignoreCase = true) || l.contains("sound", ignoreCase = true) -> return "🔊 Adding sound effects & audio..."
-                l.contains("canvas", ignoreCase = true) -> return "🎮 Drawing game canvas & visuals..."
-                l.contains("animation", ignoreCase = true) -> return "✨ Adding animations..."
-                l.contains("touch", ignoreCase = true) || l.contains("click", ignoreCase = true) -> return "👆 Setting up touch controls..."
-                l.contains("saving", ignoreCase = true) || l.contains("saved", ignoreCase = true) -> return "📁 Saving files to device..."
-                l.contains("thinking", ignoreCase = true) || l.startsWith("<thinking>") -> return "🧠 Analyzing architecture..."
-            }
-        }
-        val lineCount = text.lines().size
-        return when {
-            lineCount < 6 -> "🧠 Analyzing request & planning..."
-            lineCount < 20 -> "📋 Structuring files & logic..."
-            lineCount < 60 -> "✏️ Writing code & components..."
-            else -> "⚡ Finalizing project files..."
+        } finally {
+            runningJobs.remove(cid)
+            activeTasks.update { it - cid }
         }
     }
 
@@ -463,9 +505,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 createdAt = System.currentTimeMillis(), failed = true, error = msg
             )
         )
-        _ui.update { it.copy(streaming = false, partial = "", status = null) }
-        if (e.kind == ApiException.Kind.NETWORK || e.kind == ApiException.Kind.TIMEOUT || e.kind == ApiException.Kind.AUTH) {
-            omni.connection.markFailed(e.message ?: msg)
+        if (e.kind == ApiException.Kind.NETWORK || e.kind == ApiException.Kind.AUTH) {
+            omni.connection.markFailed(msg)
         }
     }
 
@@ -473,42 +514,42 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The caller must already hold RECORD_AUDIO. With autoSend the recognised text is sent immediately. */
     fun toggleMic(autoSend: Boolean) {
-        if (_ui.value.listening) {
+        if (_uiBase.value.listening) {
             omni.voice.stopListening()
-            _ui.update { it.copy(listening = false) }
+            _uiBase.update { it.copy(listening = false) }
             return
         }
         omni.voice.stopSpeaking()
-        _ui.update { it.copy(listening = true, speaking = false, notice = null) }
+        _uiBase.update { it.copy(listening = true, speaking = false, notice = null) }
         omni.voice.startListening(
             languageTag = omni.settings.current.language,
             heardPartial = { text -> _draft.value = text },
             heardFinal = { text ->
-                _ui.update { it.copy(listening = false) }
+                _uiBase.update { it.copy(listening = false) }
                 if (autoSend) {
                     if (send(text)) _draft.value = "" else _draft.value = text
                 } else {
                     _draft.value = text
                 }
             },
-            failed = { message -> _ui.update { it.copy(listening = false, notice = message) } }
+            failed = { message -> _uiBase.update { it.copy(listening = false, notice = message) } }
         )
     }
 
     fun speak(markdownText: String) {
         val plain = MarkdownParser.toSpeakable(markdownText)
-        _ui.update { it.copy(speaking = true) }
+        _uiBase.update { it.copy(speaking = true) }
         omni.voice.speak(
             text = plain,
             languageTag = omni.settings.current.language,
-            finished = { _ui.update { it.copy(speaking = false) } },
-            failed = { message -> _ui.update { it.copy(speaking = false, notice = message) } }
+            finished = { _uiBase.update { it.copy(speaking = false) } },
+            failed = { message -> _uiBase.update { it.copy(speaking = false, notice = message) } }
         )
     }
 
     fun stopSpeaking() {
         omni.voice.stopSpeaking()
-        _ui.update { it.copy(speaking = false) }
+        _uiBase.update { it.copy(speaking = false) }
     }
 
     override fun onCleared() {

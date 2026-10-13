@@ -170,9 +170,110 @@ object FileExport {
                 currentContent.append(line)
             } else {
                 if (line.isNotBlank()) lastTextBefore = line
-            }
         }
         return files
+    }
+
+    data class LiveFileInfo(
+        val name: String,
+        val lang: String,
+        val lineCount: Int,
+        val isFinished: Boolean
+    )
+
+    data class StreamingLiveState(
+        val activeFile: LiveFileInfo?,
+        val completedFiles: List<LiveFileInfo>,
+        val thinking: String?,
+        val stageSummary: String
+    )
+
+    /** Extracts live progress from streamed markdown in real-time. */
+    fun parseStreamingProgress(markdown: String): StreamingLiveState {
+        val lines = markdown.lines()
+        val completed = mutableListOf<LiveFileInfo>()
+        var inBlock = false
+        var currentLang = ""
+        var currentFileName: String? = null
+        var currentLineCount = 0
+        var lastTextBefore = ""
+
+        var thinkingText: String? = null
+        if (markdown.contains("<thinking>")) {
+            val start = markdown.indexOf("<thinking>") + 10
+            val end = markdown.indexOf("</thinking>")
+            thinkingText = if (end != -1) {
+                markdown.substring(start, end).trim()
+            } else {
+                markdown.substring(start).trim()
+            }
+        }
+
+        for (line in lines) {
+            val trimmed = line.trimStart()
+            if (trimmed.startsWith("```")) {
+                if (inBlock) {
+                    val finalName = currentFileName ?: fileNameFor(currentLang, lastTextBefore, completed.size)
+                    completed.add(LiveFileInfo(finalName, currentLang, currentLineCount, isFinished = true))
+                    inBlock = false
+                    currentFileName = null
+                    currentLang = ""
+                    currentLineCount = 0
+                } else {
+                    inBlock = true
+                    currentLineCount = 0
+                    val header = trimmed.removePrefix("```").trim()
+                    if (header.contains(":")) {
+                        val parts = header.split(":", limit = 2)
+                        currentLang = parts[0].trim()
+                        currentFileName = parts[1].trim()
+                    } else if (header.contains(" ")) {
+                        val parts = header.split(" ", limit = 2)
+                        currentLang = parts[0].trim()
+                        currentFileName = parts[1].trim()
+                    } else {
+                        currentLang = header
+                        if (header.contains(".")) {
+                            currentFileName = header
+                        }
+                    }
+                }
+            } else if (inBlock) {
+                currentLineCount++
+            } else {
+                if (line.isNotBlank()) lastTextBefore = line
+            }
+        }
+
+        val activeFile = if (inBlock) {
+            val finalName = currentFileName ?: fileNameFor(currentLang, lastTextBefore, completed.size)
+            LiveFileInfo(finalName, currentLang, currentLineCount, isFinished = false)
+        } else null
+
+        val stage = when {
+            activeFile != null -> {
+                val f = activeFile.name.lowercase()
+                when {
+                    f.endsWith(".html") -> "🌐 Creating HTML (${activeFile.name} • ${activeFile.lineCount} lines)"
+                    f.endsWith(".js") -> "⚡ Writing logic (${activeFile.name} • ${activeFile.lineCount} lines)"
+                    f.endsWith(".css") -> "🎨 Styling UI (${activeFile.name} • ${activeFile.lineCount} lines)"
+                    f.endsWith(".kt") || f.endsWith(".java") -> "📱 Writing code (${activeFile.name} • ${activeFile.lineCount} lines)"
+                    f.endsWith(".py") -> "🐍 Writing Python (${activeFile.name} • ${activeFile.lineCount} lines)"
+                    else -> "✏️ Writing ${activeFile.name} (${activeFile.lineCount} lines)"
+                }
+            }
+            completed.isNotEmpty() -> "📦 Packaging ${completed.size} project files & preparing ZIP..."
+            thinkingText != null -> "🧠 Thinking & planning project architecture..."
+            lines.size < 5 -> "🧠 Analyzing prompt & planning..."
+            else -> "⚡ Generating response & instructions..."
+        }
+
+        return StreamingLiveState(
+            activeFile = activeFile,
+            completedFiles = completed,
+            thinking = thinkingText,
+            stageSummary = stage
+        )
     }
 
     /** Bundles code files into a clean .zip archive. */
