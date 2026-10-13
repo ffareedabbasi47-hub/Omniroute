@@ -100,20 +100,26 @@ class OmniApp : Application() {
         super.onCreate()
 
         // Cockroach Main Looper Crash Shield: Completely stops UI thread crashes from killing the app
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            while (true) {
-                try {
-                    android.os.Looper.loop()
-                } catch (t: Throwable) {
-                    try {
-                        val file = java.io.File(filesDir, "last_crash.txt")
-                        val sw = java.io.StringWriter()
-                        t.printStackTrace(java.io.PrintWriter(sw))
-                        file.writeText("Time: ${System.currentTimeMillis()}\nShielded UI Crash:\n$sw")
-                    } catch (_: Throwable) {
+        try {
+            val mainLooper = android.os.Looper.getMainLooper()
+            if (mainLooper != null) {
+                android.os.Handler(mainLooper).post {
+                    while (true) {
+                        try {
+                            android.os.Looper.loop()
+                        } catch (t: Throwable) {
+                            try {
+                                val file = java.io.File(filesDir, "last_crash.txt")
+                                val sw = java.io.StringWriter()
+                                t.printStackTrace(java.io.PrintWriter(sw))
+                                file.writeText("Time: ${System.currentTimeMillis()}\nShielded UI Crash:\n$sw")
+                            } catch (_: Throwable) {
+                            }
+                        }
                     }
                 }
             }
+        } catch (_: Throwable) {
         }
 
         // Background Thread Crash Shield
@@ -136,6 +142,9 @@ class OmniApp : Application() {
             field.set(null, 100 * 1024 * 1024) // 100 MB cursor window to prevent big code crashes
         } catch (_: Throwable) {
         }
-        voice // pre-warm TTS for instant vocal replies
+        try {
+            voice // pre-warm TTS for instant vocal replies
+        } catch (_: Throwable) {
+        }
     }
 }

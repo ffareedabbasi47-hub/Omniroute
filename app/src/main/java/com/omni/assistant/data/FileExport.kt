@@ -170,6 +170,7 @@ object FileExport {
                 currentContent.append(line)
             } else {
                 if (line.isNotBlank()) lastTextBefore = line
+            }
         }
         return files
     }
