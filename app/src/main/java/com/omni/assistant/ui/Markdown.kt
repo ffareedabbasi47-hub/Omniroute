@@ -75,10 +75,11 @@ fun MarkdownView(
 
 @Composable
 private fun HeadingBlock(level: Int, text: String) {
+    val fontScale = LocalFontSizeScale.current
     val style = when (level) {
-        1 -> MaterialTheme.typography.titleLarge
-        2 -> MaterialTheme.typography.titleMedium
-        else -> MaterialTheme.typography.titleSmall
+        1 -> MaterialTheme.typography.titleLarge.copy(fontSize = (22f * fontScale).sp, lineHeight = (28f * fontScale).sp)
+        2 -> MaterialTheme.typography.titleMedium.copy(fontSize = (18f * fontScale).sp, lineHeight = (24f * fontScale).sp)
+        else -> MaterialTheme.typography.titleSmall.copy(fontSize = (15f * fontScale).sp, lineHeight = (20f * fontScale).sp)
     }
     Text(
         text = text,
@@ -91,6 +92,7 @@ private fun HeadingBlock(level: Int, text: String) {
 
 @Composable
 private fun ParagraphBlock(text: String) {
+    val fontScale = LocalFontSizeScale.current
     val lines = remember(text) { text.lines() }
     val safeText = remember(text) {
         if (lines.size > 200) lines.take(150).joinToString("\n") + "\n..."
@@ -98,26 +100,36 @@ private fun ParagraphBlock(text: String) {
     }
     Text(
         text = formatInlineMarkdown(safeText),
-        style = MaterialTheme.typography.bodyLarge,
+        style = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = (15.5f * fontScale).sp,
+            lineHeight = (22f * fontScale).sp
+        ),
         color = MaterialTheme.colorScheme.onSurface
     )
 }
 
 @Composable
 private fun BulletBlock(marker: String, text: String) {
+    val fontScale = LocalFontSizeScale.current
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = marker,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = (15.5f * fontScale).sp,
+                lineHeight = (22f * fontScale).sp
+            ),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
         Text(
             text = formatInlineMarkdown(text),
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = (15.5f * fontScale).sp,
+                lineHeight = (22f * fontScale).sp
+            ),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
