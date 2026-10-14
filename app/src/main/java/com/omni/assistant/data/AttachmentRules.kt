@@ -25,12 +25,20 @@ object AttachmentRules {
         "txt", "md", "markdown", "json", "csv", "tsv", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf",
         "log", "html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "kt", "kts", "java", "py", "rb", "go",
         "rs", "c", "h", "cpp", "hpp", "cs", "swift", "php", "sh", "bash", "zsh", "sql", "gradle", "properties",
-        "env", "gitignore", "dockerfile", "lua", "r", "dart", "scala"
+        "env", "gitignore", "dockerfile", "lua", "r", "dart", "scala", "jsonl", "vue", "svelte", "proto",
+        "lock", "asm", "s", "bat", "cmd", "ps1", "diff", "patch", "tex", "rst", "graphql", "gql", "sol",
+        "zig", "nim", "erl", "ex", "exs", "clj", "cljs", "lisp", "el", "pl", "pm", "awk", "sed", "cmake",
+        "make", "mk", "makefile", "dockerignore", "editorconfig", "gitattributes", "strings"
     )
 
     private val textMimes = setOf(
         "application/json", "application/xml", "application/javascript", "application/x-yaml",
         "application/yaml", "application/sql", "application/x-sh", "application/toml"
+    )
+
+    val documentExtensions = setOf(
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
+        "zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "apk", "jar", "bin", "dat", "db", "sqlite", "sqlite3"
     )
 
     fun isImage(name: String, mime: String): Boolean {
@@ -39,7 +47,7 @@ object AttachmentRules {
         return m.startsWith("image/") || ext in imageExtensions
     }
 
-    /** Returns "image", "video", "pdf", "text", or null if the type is not supported. */
+    /** Returns "image", "video", "pdf", "text", "file", or null if the type is not supported. */
     fun classify(name: String, mime: String): String? {
         val m = mime.lowercase()
         val ext = name.substringAfterLast('.', "").lowercase()
@@ -48,6 +56,9 @@ object AttachmentRules {
             m.startsWith("video/") || ext in videoExtensions -> "video"
             m == "application/pdf" || ext == "pdf" -> "pdf"
             m.startsWith("text/") || m in textMimes || ext in textExtensions -> "text"
+            ext in documentExtensions || m.startsWith("application/") -> "file"
+            ext == "exe" || ext == "dll" -> null
+            ext.isNotEmpty() -> "file"
             else -> null
         }
     }

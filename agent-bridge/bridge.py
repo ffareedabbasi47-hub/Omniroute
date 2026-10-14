@@ -313,15 +313,19 @@ class Bridge:
             "When the user asks in Hindi or Hinglish, answer in polite, clear Hindi/Hinglish. "
             "Start with a concise <thinking>...</thinking> block explaining your architectural plan and files to create. "
             "If the user has attached photos, camera captures, or video frames (file paths given in prompt), you MUST inspect them with view_file to analyze what is in the photo or video and answer accurately. "
+            "If the user has attached files, code, PDFs, or documents (file paths given as file://...), you MUST inspect them with view_file to understand their complete content before answering. "
             "When the user asks you to create or generate a photo, image, picture, or video (e.g. 'photo banao', 'image banao', 'create picture', 'creat photo', 'video banao', 'vdeo banao', 'vedeo banao'): "
             "DO NOT write code (NEVER output SVG, HTML, CSS, or canvas code blocks for images or videos). "
             "Instead, describe the scene and what was created in vivid, beautiful detail in polite Hindi/Hinglish, and inform the user that their high-resolution photo/video is generated and ready to view and download below. "
-            "When the user asks you to create a game, app, or tool (such as Talking Tom cat game, 2D game, website, etc.), "
-            "provide complete, clean, fully working code. Never truncate or leave placeholders. "
-            "Always label each code block with its exact filename (e.g. ```html:index.html, ```javascript:game.js, ```css:style.css). "
+            "When the user asks you to create, modify, or fix a game, app, or tool (such as Python, Java, Kotlin, HTML/JS/CSS, etc.), "
+            "provide complete, clean, fully working code. Never truncate or leave placeholders (such as 'pass', '// todo', '...'). "
+            "Always label each code block with its exact filename (e.g. ```html:index.html, ```javascript:game.js, ```css:style.css, ```python:app.py). "
             "For web games, ensure index.html includes full interactive visuals, sounds, animations, and touch controls so it plays immediately in a mobile browser.\n\n"
         )
         clean_prompt = str(prompt).replace("\x00", "").strip()
+        # Keep prompt under OS arg limit (MAX_ARG_STRLEN is 128KB in Linux)
+        if len(clean_prompt) > 80_000:
+            clean_prompt = clean_prompt[-80_000:]
         full_prompt = (system_hint + clean_prompt).replace("\x00", "").strip()
 
         bins = [bin_to_use]
@@ -331,10 +335,13 @@ class Bridge:
 
         candidates = []
         for b in bins:
-            candidates.append(([b, "--dangerously-skip-permissions", "-p", full_prompt], None))
-            candidates.append(([b, "-p", full_prompt], None))
-            candidates.append(([b, "--dangerously-skip-permissions"], full_prompt))
-            candidates.append(([b], full_prompt))
+            b_name = os.path.basename(b).lower()
+            if "claude" in b_name:
+                candidates.append(([b, "--dangerously-skip-permissions", "-p", full_prompt], None))
+                candidates.append(([b, "-p", full_prompt], None))
+            else:
+                # Antigravity CLI does not use --dangerously-skip-permissions
+                candidates.append(([b, "-p", full_prompt], None))
 
         last_err = ""
         for raw_cmd, raw_stdin in candidates:
@@ -391,19 +398,33 @@ class Bridge:
     def start_claude_task(self, workspace, prompt, mode):
         cwd = self.workspaces[workspace]
         task = Task("claude-" + mode, workspace)
-        argv = [self.claude_bin, "-p", "--output-format", "stream-json", "--verbose"]
-        if mode == "plan":
-            argv += ["--permission-mode", "plan", "--allowedTools", PLAN_TOOLS, "--disallowedTools", DENIED_TOOLS]
-            full_prompt = (
-                "You are in read-only planning mode. Inspect the project as needed, then reply with a concise "
-                "step-by-step plan of the exact changes you would make (files and what changes). "
-                "Do not modify anything.\n\nRequest:\n" + prompt
-            )
+        is_agy = "agy" in os.path.basename(self.claude_bin).lower()
+        if is_agy:
+            if mode == "plan":
+                plan_prompt = (
+                    "Inspect the project and reply with a concise step-by-step plan of changes to make. "
+                    "Do not modify files.\n\nRequest:\n" + prompt
+                )
+            else:
+                plan_prompt = prompt
+            argv = [self.claude_bin, "-p", plan_prompt]
+            full_prompt = None
+            stream_json = False
         else:
-            argv += ["--permission-mode", "acceptEdits", "--allowedTools", EDIT_TOOLS, "--disallowedTools", DENIED_TOOLS]
-            full_prompt = prompt
+            argv = [self.claude_bin, "-p", "--output-format", "stream-json", "--verbose"]
+            if mode == "plan":
+                argv += ["--permission-mode", "plan", "--allowedTools", PLAN_TOOLS, "--disallowedTools", DENIED_TOOLS]
+                full_prompt = (
+                    "You are in read-only planning mode. Inspect the project as needed, then reply with a concise "
+                    "step-by-step plan of the exact changes you would make (files and what changes). "
+                    "Do not modify anything.\n\nRequest:\n" + prompt
+                )
+            else:
+                argv += ["--permission-mode", "acceptEdits", "--allowedTools", EDIT_TOOLS, "--disallowedTools", DENIED_TOOLS]
+                full_prompt = prompt
+            stream_json = True
         self.register(task)
-        threading.Thread(target=self._run, args=(task, argv, cwd, full_prompt, self.task_timeout, True),
+        threading.Thread(target=self._run, args=(task, argv, cwd, full_prompt, self.task_timeout, stream_json),
                          daemon=True).start()
         return task
 
@@ -513,7 +534,7 @@ class Bridge:
         truncated = len(text) > MAX_DIFF
         return {"diff": self.redact(text[:MAX_DIFF]), "status": status.strip(), "truncated": truncated}
 
-    def git_push(self, workspace):
+    def git_push(self, workspace, message=None):
         cwd = self.workspaces.get(workspace) or self.workspaces.get("OmniAssistant")
         base = ["git", "-c", "core.fsmonitor=false", "--no-pager", "-C", cwd]
         env = self.child_env()
@@ -522,9 +543,10 @@ class Bridge:
         def run(args):
             return subprocess.run(base + args, capture_output=True, text=True, timeout=120, env=env)
 
+        msg = message or "Fix file attachments handling and prevent 0b/6b corrupted files in OmniAssistant"
         try:
             add_res = run(["add", "-A"])
-            commit_res = run(["commit", "-m", "Fix image and video generation: remove code output, generate real media with inline preview and direct download button"])
+            commit_res = run(["commit", "-m", msg])
             push_res = run(["push", "origin", "main"])
             return {
                 "ok": push_res.returncode == 0,
@@ -663,9 +685,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"files": files})
             elif method in ("GET", "POST") and path in ("/git/push", "/push"):
                 ws = (query.get("workspace") or ["OmniAssistant"])[0]
+                msg = (query.get("message") or [None])[0]
                 if ws not in b.workspaces:
                     ws = "OmniAssistant"
-                self._send(200, b.git_push(ws))
+                self._send(200, b.git_push(ws, msg))
             elif method == "GET" and path.startswith("/tasks/"):
                 task = b.tasks.get(path.split("/")[2])
                 if task is None:
@@ -836,8 +859,11 @@ class Handler(BaseHTTPRequestHandler):
         stream = body.get("stream", True)
         prompt_parts = []
         cache_dir = os.path.expanduser("~/.omni_cache")
+        attached_files_dir = os.path.join(cache_dir, "attached_files")
         os.makedirs(cache_dir, exist_ok=True)
+        os.makedirs(attached_files_dir, exist_ok=True)
         img_counter = 1
+        file_counter = 1
 
         for m in messages:
             role = m.get("role", "user")
@@ -847,7 +873,7 @@ class Handler(BaseHTTPRequestHandler):
                 for p in content:
                     if not isinstance(p, dict):
                         continue
-                    ptype = p.get("type")
+                    ptype = str(p.get("type", "")).lower()
                     if ptype == "text":
                         t = p.get("text", "")
                         if t:
@@ -873,7 +899,65 @@ class Handler(BaseHTTPRequestHandler):
                                 img_counter += 1
                             except Exception as e:
                                 text_pieces.append(f"\n[Image attached but decode failed: {e}]")
+                    elif ptype in ("file", "document") or "file" in p or "file_data" in p:
+                        file_obj = p.get("file") if isinstance(p.get("file"), dict) else p
+                        raw_fname = file_obj.get("filename") or file_obj.get("name") or f"attached_{file_counter}.bin"
+                        raw_data = file_obj.get("file_data") or file_obj.get("data") or file_obj.get("url") or ""
+                        clean_fname = os.path.basename(str(raw_fname).replace("\x00", "").strip())
+                        if not clean_fname:
+                            clean_fname = f"file_{file_counter}.bin"
+                        target_file_path = os.path.join(attached_files_dir, f"{file_counter}_{clean_fname}")
+                        try:
+                            if ";base64," in raw_data:
+                                _, b64_part = raw_data.split(";base64,", 1)
+                                file_bytes = base64.b64decode(b64_part)
+                            elif raw_data.startswith("data:"):
+                                _, b64_part = raw_data.split(",", 1)
+                                file_bytes = base64.b64decode(b64_part)
+                            elif raw_data:
+                                file_bytes = raw_data.encode("utf-8")
+                            else:
+                                file_bytes = b""
+                            
+                            with open(target_file_path, "wb") as f_out:
+                                f_out.write(file_bytes)
+                            
+                            f_size = len(file_bytes)
+                            file_desc = (
+                                f"\n[Attached User File {file_counter}: file://{target_file_path}]\n"
+                                f"Filename: {clean_fname} | Size: {f_size} bytes\n"
+                                f"(Please inspect this file using view_file at '{target_file_path}' to read its complete content and answer accurately)"
+                            )
+                            try:
+                                text_content = file_bytes.decode("utf-8")
+                                ext = clean_fname.rsplit(".", 1)[-1] if "." in clean_fname else "txt"
+                                if len(text_content) <= 25_000:
+                                    file_desc += f"\nFile content:\n```{ext}\n{text_content}\n```"
+                                else:
+                                    file_desc += f"\nFile preview (first 25KB):\n```{ext}\n{text_content[:25000]}\n```\n[...complete {f_size} bytes saved at '{target_file_path}']"
+                            except Exception:
+                                pass
+                            text_pieces.append(file_desc)
+                            file_counter += 1
+                        except Exception as e:
+                            text_pieces.append(f"\n[File {clean_fname} attached but save failed: {e}]")
                 content = " ".join(text_pieces)
+            
+            # Also extract any inlined files from text and persist them to disk for view_file
+            if isinstance(content, str) and "[File:" in content:
+                try:
+                    inlined = re.findall(r"\[File:\s*([^\]\n]+)\]\n```[a-zA-Z0-9_\-.:]*\n([\s\S]*?)```", content)
+                    for in_name, in_data in inlined:
+                        clean_in_name = os.path.basename(in_name.strip())
+                        if clean_in_name:
+                            in_path = os.path.join(attached_files_dir, f"{file_counter}_{clean_in_name}")
+                            with open(in_path, "w", encoding="utf-8") as f_in:
+                                f_in.write(in_data)
+                            file_counter += 1
+                            content += f"\n[Full file saved to device at: file://{in_path} - inspect with view_file]\n"
+                except Exception:
+                    pass
+
             prompt_parts.append(f"{role}: {content}")
         # Keep last 15 turns max to avoid OS argument length limits
         prompt = "\n".join(prompt_parts[-15:]).replace("\x00", "")
@@ -888,12 +972,16 @@ class Handler(BaseHTTPRequestHandler):
                 idx = 1
                 for header, code in matches:
                     header = header.strip()
+                    code_clean = code.strip()
+                    # Do not save empty or tiny placeholder code blocks (prevents 0b and 6b files)
+                    if len(code_clean) < 15 or code_clean in ("pass", "...", "// todo", "# todo", "// write code here", "/* todo */"):
+                        continue
                     fname = None
                     if ":" in header:
                         fname = header.split(":", 1)[1].strip()
                     elif "." in header:
                         fname = header.strip()
-                    elif header in ("svg", "xml") or code.strip().startswith("<svg"):
+                    elif header in ("svg", "xml") or code_clean.startswith("<svg"):
                         fname = f"vector_art_{idx}.svg"
                         idx += 1
                     elif header == "html" or "<!DOCTYPE" in code or "<html" in code:
@@ -902,11 +990,28 @@ class Handler(BaseHTTPRequestHandler):
                     elif header in ("python", "py"):
                         fname = f"script_{idx}.py"
                         idx += 1
+                    elif header in ("kotlin", "kt"):
+                        fname = f"code_{idx}.kt"
+                        idx += 1
+                    elif header in ("javascript", "js"):
+                        fname = f"script_{idx}.js"
+                        idx += 1
+                    elif header in ("java",):
+                        fname = f"code_{idx}.java"
+                        idx += 1
                     if fname:
+                        fname = os.path.basename(fname)
                         fpath = os.path.join(gen_dir, fname)
                         with open(fpath, "w", encoding="utf-8") as f:
                             f.write(code)
-                        saved_files.append(fname)
+                        # Verify the file was written and is not 0 bytes
+                        if os.path.isfile(fpath) and os.path.getsize(fpath) >= 15:
+                            saved_files.append(fname)
+                        else:
+                            try:
+                                os.remove(fpath)
+                            except Exception:
+                                pass
                 if saved_files:
                     text += "\n\n📁 **Files saved to device:** " + ", ".join(f"`~/OmniAssistant/generated/{f}`" for f in saved_files)
 

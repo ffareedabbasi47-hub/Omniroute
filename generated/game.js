@@ -1,14 +1,8 @@
-/* ============================================================
-   CYBER-HEART PROTOCOL: ZOYA & FARDEEN
-   Game Logic, Web Audio Synth, Interactive Controls
-   ============================================================ */
-
-// ---------------- AUDIO SYNTHESIZER ENGINE ----------------
-class SoundEngine {
+// --- Audio Synthesis via Web Audio API (Zero external audio files required) ---
+class SoundController {
   constructor() {
     this.ctx = null;
-    this.enabled = true;
-    this.bgmOscs = [];
+    this.muted = false;
   }
 
   init() {
@@ -23,663 +17,701 @@ class SoundEngine {
     }
   }
 
-  playTone(freq, type = 'sine', duration = 0.15, gainVal = 0.1) {
-    if (!this.enabled) return;
-    this.init();
-    if (!this.ctx) return;
+  toggleMute() {
+    this.muted = !this.muted;
+    return this.muted;
+  }
 
-    try {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+  playCoin() {
+    if (this.muted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(1400, now + 0.12);
+    
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    
+    osc.start(now);
+    osc.stop(now + 0.12);
+  }
 
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+  playShield() {
+    if (this.muted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(350, now);
+    osc.frequency.linearRampToValueAtTime(700, now + 0.25);
+    
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    
+    osc.start(now);
+    osc.stop(now + 0.3);
+  }
 
-      gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+  playExplosion() {
+    if (this.muted || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const bufferSize = this.ctx.sampleRate * 0.4;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
 
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
 
-      osc.start();
-      osc.stop(this.ctx.currentTime + duration);
-    } catch (e) {
-      // Audio fallback
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(700, now);
+    filter.frequency.linearRampToValueAtTime(50, now + 0.4);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.5, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    noise.start(now);
+    noise.stop(now + 0.4);
+  }
+}
+
+// --- Main Game Setup ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const scoreEl = document.getElementById('scoreDisplay');
+const startScreen = document.getElementById('startScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const startBtn = document.getElementById('startBtn');
+const restartBtn = document.getElementById('restartBtn');
+const soundBtn = document.getElementById('soundBtn');
+const finalScoreEl = document.getElementById('finalScore');
+const bestScoreEl = document.getElementById('bestScore');
+
+const sound = new SoundController();
+
+let width = window.innerWidth;
+let height = window.innerHeight;
+let highscore = parseInt(localStorage.getItem('astro_dodge_hs') || '0', 10);
+
+function resizeCanvas() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Game State
+let isPlaying = false;
+let score = 0;
+let distance = 0;
+let speed = 4;
+let screenShake = 0;
+
+// Entities
+let player;
+let stars = [];
+let obstacles = [];
+let pickups = [];
+let particles = [];
+let popups = [];
+
+// Starfield initialization
+function initStars() {
+  stars = [];
+  for (let i = 0; i < 80; i++) {
+    stars.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * 2 + 0.5,
+      speed: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.8 + 0.2
+    });
+  }
+}
+
+// Player Object
+class Player {
+  constructor() {
+    this.width = 44;
+    this.height = 54;
+    this.x = width / 2;
+    this.y = height - 120;
+    this.targetX = this.x;
+    this.targetY = this.y;
+    this.shield = false;
+    this.shieldTimer = 0;
+    this.bankAngle = 0;
+  }
+
+  update() {
+    // Smooth lerp movement toward target touch/mouse position
+    const dx = this.targetX - this.x;
+    this.x += dx * 0.2;
+
+    const dy = this.targetY - this.y;
+    this.y += dy * 0.2;
+
+    // Boundary constraints
+    this.x = Math.max(this.width / 2, Math.min(width - this.width / 2, this.x));
+    this.y = Math.max(this.height, Math.min(height - 40, this.y));
+
+    // Dynamic banking angle based on horizontal speed
+    this.bankAngle = (dx * 0.05);
+    this.bankAngle = Math.max(-0.4, Math.min(0.4, this.bankAngle));
+
+    // Thruster engine particles
+    if (Math.random() > 0.1) {
+      particles.push({
+        x: this.x + (Math.random() * 8 - 4),
+        y: this.y + 24,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: Math.random() * 3 + 4,
+        size: Math.random() * 4 + 3,
+        color: Math.random() > 0.4 ? '#00f0ff' : '#ff0077',
+        life: 1.0,
+        decay: 0.05
+      });
+    }
+
+    if (this.shield) {
+      this.shieldTimer -= 1 / 60;
+      if (this.shieldTimer <= 0) {
+        this.shield = false;
+      }
     }
   }
 
-  playClick() {
-    this.playTone(800, 'sine', 0.08, 0.08);
-  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.bankAngle);
 
-  playSuccess() {
-    if (!this.enabled) return;
-    this.init();
-    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
-    notes.forEach((freq, idx) => {
-      setTimeout(() => this.playTone(freq, 'triangle', 0.25, 0.12), idx * 80);
-    });
-  }
+    // Glowing Neon Shield if active
+    if (this.shield) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, 36 + Math.sin(Date.now() * 0.01) * 3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
 
-  playBuzzer() {
-    if (!this.enabled) return;
-    this.init();
-    this.playTone(180, 'sawtooth', 0.3, 0.15);
-    setTimeout(() => this.playTone(130, 'sawtooth', 0.4, 0.15), 120);
-  }
+    // Spaceship Body (Futuristic Fighter)
+    ctx.shadowColor = '#00f0ff';
+    ctx.shadowBlur = 12;
 
-  playHeartCatch() {
-    this.playTone(987.77, 'sine', 0.15, 0.12);
-    setTimeout(() => this.playTone(1318.51, 'sine', 0.2, 0.12), 60);
-  }
+    // Wings
+    ctx.fillStyle = '#0f274a';
+    ctx.beginPath();
+    ctx.moveTo(0, -26);
+    ctx.lineTo(24, 20);
+    ctx.lineTo(12, 16);
+    ctx.lineTo(0, 22);
+    ctx.lineTo(-12, 16);
+    ctx.lineTo(-24, 20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-  playBugHit() {
-    this.playTone(220, 'square', 0.18, 0.1);
-  }
+    // Central Fuselage
+    ctx.fillStyle = '#1e4880';
+    ctx.beginPath();
+    ctx.moveTo(0, -28);
+    ctx.lineTo(8, 10);
+    ctx.lineTo(0, 16);
+    ctx.lineTo(-8, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#7be7ff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
-  playRomanticMelody() {
-    if (!this.enabled) return;
-    this.init();
-    // Sweet polyphonic progression (F - G - Em - Am chord arpeggios)
-    const chords = [
-      [349.23, 440.00, 523.25], // F major
-      [392.00, 493.88, 587.33], // G major
-      [329.63, 392.00, 493.88], // E minor
-      [440.00, 523.25, 659.25]  // A minor
-    ];
-    let step = 0;
-    const playChordStep = () => {
-      if (currentScreen !== 'screen-proposal') return;
-      const currentChord = chords[step % chords.length];
-      currentChord.forEach((note, i) => {
-        setTimeout(() => this.playTone(note, 'sine', 1.2, 0.06), i * 140);
-      });
-      step++;
-      setTimeout(playChordStep, 1800);
-    };
-    playChordStep();
-  }
-}
+    // Glowing Cockpit
+    ctx.fillStyle = '#ff0077';
+    ctx.shadowColor = '#ff0077';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.ellipse(0, -4, 4, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-const audio = new SoundEngine();
-
-// ---------------- HAPTIC VIBRATION ----------------
-function triggerVibrate(pattern = [40]) {
-  if ('vibrate' in navigator) {
-    try {
-      navigator.vibrate(pattern);
-    } catch (e) {}
-  }
-}
-
-// ---------------- GLOBAL STATE ----------------
-let currentScreen = 'screen-intro';
-let currentQuestionIndex = 0;
-let loveMeterScore = 20;
-
-// Quiz Data with Masti & Cuteness
-const quizQuestions = [
-  {
-    q: "Sawal 1: Fardeen din bhar sabse zyada kya karta hai? 😂",
-    options: [
-      { text: "Pura din padhai aur serious kaam 📚", type: "funny", roast: "Arey arey itna bada safed jhooth! Fardeen aur itni padhai? 😂 Galat jawab!" },
-      { text: "Dosto ke sath gappe marta hai 🍕", type: "funny", roast: "Thoda bohot karta hai, par ye uska main passion nahi hai madam! 😜" },
-      { text: "Sirf aur sirf Zoya ke khayalo me khoya rehta hai 🙈💖", type: "correct", roast: "BINGO! 100% Sach! Fardeen ke har second me sirf tum hi tum ho! ✨" },
-      { text: "Khaata hai aur so jata hai 😴", type: "funny", roast: "Ye toh tumhara routine lag raha hai! Fardeen ka nahi 😂" }
-    ]
-  },
-  {
-    q: "Sawal 2: Zoya ka sabse dangerous weapon kya hai jisse Fardeen ghayal ho jata hai? ⚔️",
-    options: [
-      { text: "Uski killer smile aur cute nakhre 🥺✨", type: "correct", roast: "Sachme! Is weapon ka koi antivirus pure internet par nahi bana! ❤️" },
-      { text: "Ek baar 'Hmm' bolkar ignore karna 💀", type: "funny", roast: "Critical Damage 9999 HP! Fardeen ka dimaag hil jata hai isse 😂" },
-      { text: "Uski gusse wali aankhen 😤", type: "funny", roast: "Gusse me bhi tum cute hi lagti ho, darr bilkul nahi lagta! 😜" },
-      { text: "Baatein ghuma-fira kar bolna 🌀", type: "funny", roast: "Hehehe, par Fardeen fir bhi pyaar se sunta rehta hai! 💖" }
-    ]
-  },
-  {
-    q: "Sawal 3: Agar Fardeen aur Zoya me fight ho jaye, toh galti kiski hogi? 🥊",
-    options: [
-      { text: "Obviously Fardeen ki (Chahe jo ho jaye) 👑", type: "correct", roast: "Universal Truth Rule #1: Zoya is ALWAYS right! Fardeen bina lade sorry bol dega! 😂🤝" },
-      { text: "Kisi ki nahi, dono milkar ice-cream khayenge 🍦", type: "correct", roast: "Super cute! Treat Fardeen ki taraf se pakki rahi! 😋💖" },
-      { text: "Zoya ki galti hogi thodi si 🤏", type: "funny", roast: "Arey system glitch! Zoya ki galti ho hi nahi sakti, Fardeen hi maafi mangega! 🤣" }
-    ]
-  }
-];
-
-// ---------------- DOM ELEMENTS ----------------
-const soundBtn = document.getElementById('sound-btn');
-const soundIcon = document.getElementById('sound-icon');
-
-// Sound Toggle Button
-soundBtn.addEventListener('click', () => {
-  audio.enabled = !audio.enabled;
-  soundIcon.textContent = audio.enabled ? '🔊' : '🔇';
-  if (audio.enabled) audio.playClick();
-});
-
-// Screen Switcher
-function switchScreen(screenId) {
-  document.querySelectorAll('.game-screen').forEach(el => el.classList.remove('active'));
-  const target = document.getElementById(screenId);
-  if (target) {
-    target.classList.add('active');
-    currentScreen = screenId;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    ctx.restore();
   }
 }
 
-// ---------------- SCREEN 1: VERIFICATION ----------------
-function verifyIdentity(type) {
-  audio.init();
-  const dialogue = document.getElementById('intro-dialogue');
-  
-  if (type === 'alien') {
-    audio.playBuzzer();
-    triggerVibrate([60, 40, 60]);
-    dialogue.innerHTML = "Hahaha! Alien ho tab bhi Fardeen tumhara hi dimaag khayega! 😂 Chalo ab chup-chaap game shuru karo!";
-    setTimeout(() => {
-      startQuiz();
-    }, 1500);
-  } else {
-    audio.playSuccess();
-    triggerVibrate([80]);
-    dialogue.innerHTML = "Access Granted! 💖 Welcome Zoya! Fardeen ne ye secret game khas tumhare chehre par muskurahat laane ke liye banaya hai!";
-    setTimeout(() => {
-      startQuiz();
-    }, 1200);
+// Asteroid / Enemy Class
+class Obstacle {
+  constructor() {
+    this.size = Math.random() * 24 + 20;
+    this.x = Math.random() * (width - this.size * 2) + this.size;
+    this.y = -this.size - 20;
+    this.vy = speed + Math.random() * 2;
+    this.vx = (Math.random() - 0.5) * 1.5;
+    this.angle = 0;
+    this.rotSpeed = (Math.random() - 0.5) * 0.05;
+    this.points = [];
+    
+    // Procedural Asteroid Shape
+    const numPoints = 8;
+    for (let i = 0; i < numPoints; i++) {
+      const a = (i / numPoints) * Math.PI * 2;
+      const r = this.size * (0.8 + Math.random() * 0.4);
+      this.points.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+    }
+  }
+
+  update() {
+    this.y += this.vy;
+    this.x += this.vx;
+    this.angle += this.rotSpeed;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+
+    ctx.fillStyle = '#221c2e';
+    ctx.strokeStyle = '#ff4d6d';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#ff2a55';
+    ctx.shadowBlur = 10;
+
+    ctx.beginPath();
+    ctx.moveTo(this.points[0].x, this.points[0].y);
+    for (let i = 1; i < this.points.length; i++) {
+      ctx.lineTo(this.points[i].x, this.points[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner detail
+    ctx.fillStyle = 'rgba(255, 77, 109, 0.2)';
+    ctx.beginPath();
+    ctx.arc(4, -4, this.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   }
 }
 
-// ---------------- SCREEN 2: QUIZ LOGIC ----------------
-function startQuiz() {
-  currentQuestionIndex = 0;
-  loveMeterScore = 25;
-  switchScreen('screen-quiz');
-  loadQuestion();
+// Collectible Gem / Shield
+class Pickup {
+  constructor() {
+    this.type = Math.random() < 0.2 ? 'shield' : 'crystal';
+    this.size = 18;
+    this.x = Math.random() * (width - 60) + 30;
+    this.y = -30;
+    this.vy = speed * 0.85;
+    this.pulse = 0;
+  }
+
+  update() {
+    this.y += this.vy;
+    this.pulse += 0.08;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    const scale = 1 + Math.sin(this.pulse) * 0.15;
+    ctx.scale(scale, scale);
+
+    if (this.type === 'shield') {
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 2.5;
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.4)';
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Shield icon
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🛡️', 0, 0);
+    } else {
+      // Crystal diamond
+      ctx.shadowColor = '#ffe600';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = '#ffe600';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(12, 0);
+      ctx.lineTo(0, 14);
+      ctx.lineTo(-12, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
 }
 
-function loadQuestion() {
-  const qData = quizQuestions[currentQuestionIndex];
-  document.getElementById('quiz-progress').textContent = `QUESTION ${currentQuestionIndex + 1} / ${quizQuestions.length}`;
-  document.getElementById('love-meter-fill').style.width = `${loveMeterScore}%`;
-  document.getElementById('question-text').textContent = qData.q;
-  
-  const optionsContainer = document.getElementById('options-container');
-  optionsContainer.innerHTML = '';
-  document.getElementById('feedback-box').classList.add('hidden');
-
-  qData.options.forEach((opt, idx) => {
-    const btn = document.createElement('button');
-    btn.className = 'option-btn';
-    btn.innerHTML = `<span class="opt-bullet">✨</span><span>${opt.text}</span>`;
-    btn.onclick = () => handleAnswer(opt, btn);
-    optionsContainer.appendChild(btn);
+// Floating Popup Text
+function addPopup(text, x, y, color = '#00f0ff') {
+  popups.push({
+    text,
+    x,
+    y,
+    vy: -2,
+    alpha: 1.0,
+    color
   });
 }
 
-function handleAnswer(option, btnElement) {
-  audio.init();
-  const feedbackBox = document.getElementById('feedback-box');
-  const feedbackEmoji = document.getElementById('feedback-emoji');
-  const feedbackText = document.getElementById('feedback-text');
-
-  // Disable all option buttons
-  document.querySelectorAll('.option-btn').forEach(b => b.style.pointerEvents = 'none');
-
-  if (option.type === 'correct') {
-    audio.playSuccess();
-    triggerVibrate([60, 50, 100]);
-    btnElement.classList.add('selected-correct');
-    feedbackEmoji.textContent = '🥰';
-    loveMeterScore = Math.min(100, loveMeterScore + 30);
-  } else {
-    audio.playBuzzer();
-    triggerVibrate([80]);
-    btnElement.classList.add('selected-funny');
-    feedbackEmoji.textContent = '😂';
-    loveMeterScore = Math.min(100, loveMeterScore + 15);
-  }
-
-  feedbackText.textContent = option.roast;
-  feedbackBox.classList.remove('hidden');
-  document.getElementById('love-meter-fill').style.width = `${loveMeterScore}%`;
-}
-
-function nextQuestion() {
-  audio.playClick();
-  currentQuestionIndex++;
-  if (currentQuestionIndex < quizQuestions.length) {
-    loadQuestion();
-  } else {
-    // Move to Scanner
-    switchScreen('screen-scanner');
-    initScanner();
+// Particle Explosions
+function spawnExplosion(x, y, color = '#ff0055', count = 25) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const mag = Math.random() * 6 + 1.5;
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * mag,
+      vy: Math.sin(angle) * mag,
+      size: Math.random() * 5 + 2,
+      color,
+      life: 1.0,
+      decay: Math.random() * 0.04 + 0.02
+    });
   }
 }
 
-// ---------------- SCREEN 3: LOVE SCANNER ----------------
-function initScanner() {
-  const zone = document.getElementById('scanner-zone');
-  const counter = document.getElementById('scan-counter');
-  const hint = document.getElementById('scan-hint');
-  const result = document.getElementById('scan-result');
-  let scanInterval = null;
-  let progress = 0;
+// --- Input Handling (Touch + Mouse + Keyboard) ---
+let isTouching = false;
 
-  const startScan = (e) => {
-    if (e) e.preventDefault();
-    if (progress >= 100) return;
-    audio.init();
-    audio.playTone(400, 'sine', 0.1, 0.05);
-    zone.classList.add('scanning');
-    hint.textContent = "Scanning Crush Frequency... 💓";
+function setTargetPosition(clientX, clientY) {
+  if (!player) return;
+  const rect = canvas.getBoundingClientRect();
+  player.targetX = clientX - rect.left;
+  // Offset slightly above finger so finger does not cover ship
+  player.targetY = clientY - rect.top - 30;
+}
 
-    scanInterval = setInterval(() => {
-      progress += 4;
-      counter.textContent = `${progress}%`;
-      triggerVibrate([20]);
-      audio.playTone(300 + progress * 8, 'sine', 0.04, 0.04);
+// Touch events
+window.addEventListener('touchstart', (e) => {
+  sound.init();
+  if (!isPlaying) return;
+  isTouching = true;
+  const touch = e.touches[0];
+  setTargetPosition(touch.clientX, touch.clientY);
+}, { passive: false });
 
-      if (progress >= 100) {
-        clearInterval(scanInterval);
-        zone.classList.remove('scanning');
-        counter.textContent = "999.9%";
-        hint.textContent = "SCAN COMPLETE!";
-        audio.playSuccess();
-        triggerVibrate([100, 50, 150]);
-        result.classList.remove('hidden');
-      }
-    }, 60);
-  };
+window.addEventListener('touchmove', (e) => {
+  if (!isPlaying || !isTouching) return;
+  const touch = e.touches[0];
+  setTargetPosition(touch.clientX, touch.clientY);
+  e.preventDefault();
+}, { passive: false });
 
-  const stopScan = () => {
-    if (progress < 100) {
-      clearInterval(scanInterval);
-      zone.classList.remove('scanning');
-      hint.textContent = "Don't let go! Tap & hold again!";
+window.addEventListener('touchend', () => {
+  isTouching = false;
+});
+
+// Mouse events
+window.addEventListener('mousedown', (e) => {
+  sound.init();
+  if (!isPlaying) return;
+  setTargetPosition(e.clientX, e.clientY);
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!isPlaying) return;
+  if (e.buttons === 1) {
+    setTargetPosition(e.clientX, e.clientY);
+  }
+});
+
+// Keyboard support
+const keys = {};
+window.addEventListener('keydown', (e) => {
+  keys[e.key] = true;
+  sound.init();
+});
+window.addEventListener('keyup', (e) => {
+  keys[e.key] = false;
+});
+
+function handleKeyboardInput() {
+  if (!player || !isPlaying) return;
+  const moveSpeed = 8;
+  if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.targetX -= moveSpeed;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) player.targetX += moveSpeed;
+  if (keys['ArrowUp'] || keys['w'] || keys['W']) player.targetY -= moveSpeed;
+  if (keys['ArrowDown'] || keys['s'] || keys['S']) player.targetY += moveSpeed;
+}
+
+// Sound toggle
+soundBtn.addEventListener('click', () => {
+  sound.init();
+  const isMuted = sound.toggleMute();
+  soundBtn.textContent = isMuted ? '🔇' : '🔊';
+});
+
+// Game Cycle
+let spawnTimer = 0;
+let pickupTimer = 0;
+
+function resetGame() {
+  score = 0;
+  distance = 0;
+  speed = 4;
+  screenShake = 0;
+  obstacles = [];
+  pickups = [];
+  particles = [];
+  popups = [];
+  player = new Player();
+  initStars();
+  scoreEl.textContent = `SCORE: 0`;
+}
+
+function startGame() {
+  sound.init();
+  resetGame();
+  startScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+  isPlaying = true;
+}
+
+function triggerGameOver() {
+  isPlaying = false;
+  sound.playExplosion();
+  if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
+
+  if (score > highscore) {
+    highscore = score;
+    localStorage.setItem('astro_dodge_hs', highscore.toString());
+  }
+
+  finalScoreEl.textContent = score.toString();
+  bestScoreEl.textContent = highscore.toString();
+  gameOverScreen.classList.remove('hidden');
+}
+
+startBtn.addEventListener('click', startGame);
+restartBtn.addEventListener('click', startGame);
+
+// Animation Loop
+let lastTime = performance.now();
+
+function gameLoop(now) {
+  requestAnimationFrame(gameLoop);
+
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+
+  // Screen shake handling
+  ctx.save();
+  if (screenShake > 0) {
+    const sx = (Math.random() - 0.5) * screenShake;
+    const sy = (Math.random() - 0.5) * screenShake;
+    ctx.translate(sx, sy);
+    screenShake *= 0.9;
+    if (screenShake < 0.5) screenShake = 0;
+  }
+
+  // Clear Canvas with subtle motion trail
+  ctx.fillStyle = '#050714';
+  ctx.fillRect(0, 0, width, height);
+
+  // Update & Draw Starfield
+  for (let s of stars) {
+    s.y += s.speed * (isPlaying ? (speed / 3) : 1);
+    if (s.y > height) {
+      s.y = 0;
+      s.x = Math.random() * width;
     }
-  };
+    ctx.fillStyle = `rgba(180, 220, 255, ${s.alpha})`;
+    ctx.fillRect(s.x, s.y, s.size, s.size * 1.5);
+  }
 
-  zone.onmousedown = startScan;
-  zone.onmouseup = stopScan;
-  zone.ontouchstart = startScan;
-  zone.ontouchend = stopScan;
-}
+  if (isPlaying) {
+    handleKeyboardInput();
 
-function goToMiniGame() {
-  audio.playClick();
-  switchScreen('screen-game');
-}
+    // Distance and score progression
+    distance += dt * 10;
+    score = Math.floor(distance);
+    scoreEl.textContent = `SCORE: ${score}`;
 
-// ---------------- SCREEN 4: MINI GAME (CATCH HEARTS) ----------------
-let gameScore = 0;
-let gameTimer = 18;
-let gameLoopInterval = null;
-let itemSpawnInterval = null;
-let isGameRunning = false;
+    // Dynamic speed ramp-up
+    speed = 4 + Math.min(10, score / 200);
 
-function startCatchGame() {
-  audio.init();
-  audio.playClick();
-  document.getElementById('game-start-overlay').style.display = 'none';
-  gameScore = 0;
-  gameTimer = 18;
-  isGameRunning = true;
-  document.getElementById('game-score').textContent = gameScore;
-  document.getElementById('game-timer').textContent = `${gameTimer}s`;
+    // Spawning Obstacles
+    spawnTimer += dt;
+    const spawnInterval = Math.max(0.5, 1.4 - (score / 1000));
+    if (spawnTimer >= spawnInterval) {
+      obstacles.push(new Obstacle());
+      spawnTimer = 0;
+    }
 
-  const arena = document.getElementById('game-arena');
-  const basket = document.getElementById('basket');
-  const itemsLayer = document.getElementById('items-layer');
-  itemsLayer.innerHTML = '';
+    // Spawning Pickups
+    pickupTimer += dt;
+    if (pickupTimer >= 2.5) {
+      pickups.push(new Pickup());
+      pickupTimer = 0;
+    }
 
-  // Basket Touch & Mouse Control
-  let basketX = arena.clientWidth / 2;
+    player.update();
+  }
 
-  const updateBasketPos = (clientX) => {
-    const rect = arena.getBoundingClientRect();
-    let relativeX = clientX - rect.left;
-    relativeX = Math.max(34, Math.min(arena.clientWidth - 34, relativeX));
-    basket.style.left = `${relativeX}px`;
-    basketX = relativeX;
-  };
+  // Update & Draw Pickups
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const p = pickups[i];
+    p.update();
+    p.draw();
 
-  arena.ontouchmove = (e) => {
-    e.preventDefault();
-    if (e.touches[0]) updateBasketPos(e.touches[0].clientX);
-  };
-  arena.onmousemove = (e) => {
-    updateBasketPos(e.clientX);
-  };
-
-  // Spawn Falling Items
-  const items = [
-    { emoji: '💖', pts: 10, type: 'heart' },
-    { emoji: '💕', pts: 10, type: 'heart' },
-    { emoji: '⭐', pts: 15, type: 'star' },
-    { emoji: '💌', pts: 20, type: 'letter' },
-    { emoji: '🐛', pts: -5, type: 'bug' } // Overthinking bug
-  ];
-
-  itemSpawnInterval = setInterval(() => {
-    if (!isGameRunning) return;
-    const randomItem = items[Math.floor(Math.random() * items.length)];
-    const itemEl = document.createElement('div');
-    itemEl.className = 'game-item';
-    itemEl.textContent = randomItem.emoji;
-    itemEl.dataset.type = randomItem.type;
-    itemEl.dataset.pts = randomItem.pts;
-
-    const startLeft = Math.random() * (arena.clientWidth - 40) + 20;
-    itemEl.style.left = `${startLeft}px`;
-    itemEl.style.top = '-40px';
-    itemsLayer.appendChild(itemEl);
-
-    // Fall animation
-    let topY = -40;
-    const speed = 3.2 + Math.random() * 2.5;
-
-    const fall = setInterval(() => {
-      if (!isGameRunning) {
-        clearInterval(fall);
-        itemEl.remove();
-        return;
+    // Pickup collision with player
+    if (isPlaying) {
+      const dist = Math.hypot(p.x - player.x, p.y - player.y);
+      if (dist < p.size + player.width * 0.45) {
+        if (p.type === 'shield') {
+          player.shield = true;
+          player.shieldTimer = 8; // 8 seconds of shield
+          sound.playShield();
+          if (navigator.vibrate) navigator.vibrate(50);
+          addPopup('SHIELD ACTIVE!', p.x, p.y, '#00f0ff');
+        } else {
+          score += 100;
+          distance += 100;
+          sound.playCoin();
+          if (navigator.vibrate) navigator.vibrate(30);
+          addPopup('+100', p.x, p.y, '#ffe600');
+        }
+        spawnExplosion(p.x, p.y, p.type === 'shield' ? '#00f0ff' : '#ffe600', 12);
+        pickups.splice(i, 1);
+        continue;
       }
-      topY += speed;
-      itemEl.style.top = `${topY}px`;
+    }
 
-      // Collision Detection with basket
-      if (topY >= arena.clientHeight - 65 && topY <= arena.clientHeight - 15) {
-        const itemLeft = parseFloat(itemEl.style.left);
-        if (Math.abs(itemLeft - basketX) < 45) {
-          // Caught!
-          clearInterval(fall);
-          itemEl.remove();
-          const pts = parseInt(randomItem.pts);
-          gameScore = Math.max(0, gameScore + pts);
-          document.getElementById('game-score').textContent = gameScore;
+    if (p.y > height + 40) {
+      pickups.splice(i, 1);
+    }
+  }
 
-          if (pts > 0) {
-            audio.playHeartCatch();
-            triggerVibrate([30]);
-            basket.querySelector('.basket-face').textContent = '😍';
-          } else {
-            audio.playBugHit();
-            triggerVibrate([70]);
-            basket.querySelector('.basket-face').textContent = '😵';
-          }
-          setTimeout(() => {
-            if (basket) basket.querySelector('.basket-face').textContent = '🥰';
-          }, 300);
+  // Update & Draw Obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    obs.update();
+    obs.draw();
+
+    // Collision Check
+    if (isPlaying) {
+      const dist = Math.hypot(obs.x - player.x, obs.y - player.y);
+      if (dist < obs.size * 0.8 + player.width * 0.4) {
+        if (player.shield) {
+          // Shield absorbs impact
+          player.shield = false;
+          screenShake = 12;
+          sound.playExplosion();
+          if (navigator.vibrate) navigator.vibrate(80);
+          spawnExplosion(obs.x, obs.y, '#00f0ff', 20);
+          addPopup('SHIELD BROKEN!', player.x, player.y - 20, '#ff0077');
+          obstacles.splice(i, 1);
+          continue;
+        } else {
+          // Ship destroyed
+          screenShake = 22;
+          spawnExplosion(player.x, player.y, '#ff0055', 40);
+          spawnExplosion(player.x, player.y, '#00f0ff', 25);
+          triggerGameOver();
+          break;
         }
       }
-
-      if (topY > arena.clientHeight) {
-        clearInterval(fall);
-        itemEl.remove();
-      }
-    }, 20);
-
-  }, 600);
-
-  // Countdown timer
-  gameLoopInterval = setInterval(() => {
-    gameTimer--;
-    document.getElementById('game-timer').textContent = `${gameTimer}s`;
-
-    if (gameTimer <= 0 || gameScore >= 60) {
-      endCatchGame();
     }
-  }, 1000);
-}
 
-function endCatchGame() {
-  isGameRunning = false;
-  clearInterval(gameLoopInterval);
-  clearInterval(itemSpawnInterval);
-  audio.playSuccess();
-  triggerVibrate([80, 50, 120]);
-
-  setTimeout(() => {
-    switchScreen('screen-cipher');
-  }, 700);
-}
-
-// ---------------- SCREEN 5: CIPHER UNLOCK ----------------
-let enteredKeys = [];
-const correctCode = ['Z', 'O', 'Y', 'A'];
-
-function pressKey(letter) {
-  audio.init();
-  if (enteredKeys.length < 4) {
-    audio.playClick();
-    triggerVibrate([30]);
-    enteredKeys.push(letter);
-    updateCipherSlots();
-
-    if (enteredKeys.length === 4) {
-      checkCipher();
+    if (obs.y > height + 60) {
+      obstacles.splice(i, 1);
     }
   }
-}
 
-function clearKeys() {
-  audio.playClick();
-  enteredKeys = [];
-  updateCipherSlots();
-  document.getElementById('cipher-message').textContent = "Sahi letters tap karo...";
-}
-
-function updateCipherSlots() {
-  for (let i = 0; i < 4; i++) {
-    const slot = document.getElementById(`slot-${i}`);
-    slot.textContent = enteredKeys[i] ? enteredKeys[i] : '_';
-  }
-}
-
-function checkCipher() {
-  const isMatch = enteredKeys.every((val, index) => val === correctCode[index]);
-  const msg = document.getElementById('cipher-message');
-
-  if (isMatch) {
-    audio.playSuccess();
-    triggerVibrate([100, 60, 150]);
-    msg.textContent = "ACCESS GRANTED! Fardeen ka dil unlock ho gaya! 💖🔓";
-    msg.style.color = "var(--neon-cyan)";
-    setTimeout(() => {
-      switchScreen('screen-proposal');
-      initProposalScreen();
-    }, 1200);
-  } else {
-    audio.playBuzzer();
-    triggerVibrate([80, 50, 80]);
-    msg.textContent = "Oops! Galat password! Hint: Z-O-Y-A 😜";
-    msg.style.color = "var(--neon-pink)";
-    setTimeout(() => {
-      clearKeys();
-    }, 1000);
-  }
-}
-
-// ---------------- SCREEN 6: THE PROPOSAL & KHAT ----------------
-function initProposalScreen() {
-  initFxCanvas();
-}
-
-function openLoveLetter() {
-  audio.init();
-  audio.playSuccess();
-  triggerVibrate([100]);
-  document.getElementById('envelope-sealed').style.display = 'none';
-  document.getElementById('letter-content').classList.remove('hidden');
-  audio.playRomanticMelody();
-  setupRunawayButton();
-}
-
-// The Hilarious Runaway "Sochungi 😏" Button
-function setupRunawayButton() {
-  const noBtn = document.getElementById('no-btn');
-  const noBtnText = document.getElementById('no-btn-text');
-  const funnyLines = [
-    "Arey pakad ke dikhao! 😂",
-    "Fardeen ko No bolna mana hai! 😜",
-    "Button bhaag gaya lol! 🏃‍♂️💨",
-    "Itna bhav mat khao Zoya! 🤣",
-    "Pyaar se YES dabao na! 💖",
-    "Error: Rejection module crashed! 🤖",
-    "Haath me nahi aaunga! 😝"
-  ];
-  let dodgeCount = 0;
-
-  const dodge = (e) => {
-    if (e) e.preventDefault();
-    audio.playTone(600 + Math.random() * 400, 'sine', 0.08, 0.08);
-    triggerVibrate([30]);
-
-    dodgeCount++;
-    noBtnText.textContent = funnyLines[dodgeCount % funnyLines.length];
-
-    // Calculate safe random coordinates inside screen
-    const maxOffset = 110;
-    const randX = (Math.random() - 0.5) * maxOffset * 1.8;
-    const randY = (Math.random() - 0.5) * maxOffset;
-
-    noBtn.style.transform = `translate(${randX}px, ${randY}px) scale(0.95)`;
-  };
-
-  noBtn.onmouseenter = dodge;
-  noBtn.ontouchstart = dodge;
-  noBtn.onclick = dodge;
-}
-
-// Accept Proposal (YES!)
-function acceptProposal() {
-  audio.init();
-  audio.playSuccess();
-  triggerVibrate([150, 80, 200, 100, 300]);
-
-  document.getElementById('letter-content').classList.add('hidden');
-  document.getElementById('celebration-box').classList.remove('hidden');
-
-  // Launch Super Confetti & Fireworks!
-  launchCelebrationParticles();
-}
-
-// ---------------- CONFETTI & FIREWORKS ENGINE ----------------
-let particles = [];
-let animFrameId = null;
-
-function initFxCanvas() {
-  const canvas = document.getElementById('fx-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-
-  const resize = () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  };
-  resize();
-  window.addEventListener('resize', resize);
-}
-
-function launchCelebrationParticles() {
-  const canvas = document.getElementById('fx-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  particles = [];
-
-  const colors = ['#ff2d75', '#00f0ff', '#ffd166', '#ffffff', '#b5179e', '#ff70a6'];
-
-  // Spawn 150 particles
-  for (let i = 0; i < 160; i++) {
-    particles.push({
-      x: canvas.width / 2,
-      y: canvas.height / 2 + 50,
-      vx: (Math.random() - 0.5) * 16,
-      vy: (Math.random() - 0.8) * 18,
-      size: Math.random() * 8 + 4,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      alpha: 1,
-      decay: Math.random() * 0.008 + 0.004,
-      isHeart: Math.random() > 0.4
-    });
+  // Draw Player
+  if (isPlaying) {
+    player.draw();
   }
 
-  const loop = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Update & Draw Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= p.decay;
 
-    particles.forEach((p, idx) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.28; // gravity
-      p.alpha -= p.decay;
-
-      if (p.alpha <= 0) {
-        particles.splice(idx, 1);
-        return;
-      }
-
-      ctx.save();
-      ctx.globalAlpha = p.alpha;
-      ctx.fillStyle = p.color;
-
-      if (p.isHeart) {
-        // Draw tiny glowing heart
-        ctx.font = `${p.size * 2}px sans-serif`;
-        ctx.fillText('💖', p.x, p.y);
-      } else {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-    });
-
-    if (particles.length > 0) {
-      animFrameId = requestAnimationFrame(loop);
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
     }
-  };
 
-  loop();
-}
-
-// ---------------- SHARE & RESTART ----------------
-function shareWithFardeen() {
-  const msg = encodeURIComponent("Fardeen! Maine tumhara Cyber Game khela aur mera answer YES hai! 💖💍 Tum sach me bohot cute ho!");
-  window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
-}
-
-function restartGame() {
-  audio.playClick();
-  currentQuestionIndex = 0;
-  enteredKeys = [];
-  document.getElementById('celebration-box').classList.add('hidden');
-  document.getElementById('letter-content').classList.add('hidden');
-  document.getElementById('envelope-sealed').style.display = 'block';
-  document.getElementById('game-start-overlay').style.display = 'flex';
-  switchScreen('screen-intro');
-}
-
-// Background Twinkling Cyber Stars
-function createCyberStars() {
-  const container = document.getElementById('stars-container');
-  if (!container) return;
-  for (let i = 0; i < 40; i++) {
-    const star = document.createElement('div');
-    star.style.position = 'absolute';
-    star.style.width = `${Math.random() * 3 + 1}px`;
-    star.style.height = star.style.width;
-    star.style.background = Math.random() > 0.5 ? '#00f0ff' : '#ff2d75';
-    star.style.borderRadius = '50%';
-    star.style.top = `${Math.random() * 100}%`;
-    star.style.left = `${Math.random() * 100}%`;
-    star.style.opacity = Math.random() * 0.7 + 0.3;
-    star.style.boxShadow = `0 0 6px ${star.style.background}`;
-    container.appendChild(star);
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
+
+  // Update & Draw Floating Popups
+  for (let i = popups.length - 1; i >= 0; i--) {
+    const pop = popups[i];
+    pop.y += pop.vy;
+    pop.alpha -= 0.02;
+
+    if (pop.alpha <= 0) {
+      popups.splice(i, 1);
+      continue;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = pop.alpha;
+    ctx.fillStyle = pop.color;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = pop.color;
+    ctx.shadowBlur = 8;
+    ctx.fillText(pop.text, pop.x, pop.y);
+    ctx.restore();
+  }
+
+  ctx.restore();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  createCyberStars();
-});
+// Initial Starfield & Start render
+initStars();
+requestAnimationFrame(gameLoop);

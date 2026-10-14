@@ -143,8 +143,12 @@ object FileExport {
             val trimmed = line.trimStart()
             if (trimmed.startsWith("```")) {
                 if (inBlock) {
-                    val finalName = currentFileName ?: fileNameFor(currentLang, lastTextBefore, files.size)
-                    files.add(CodeFile(finalName, currentLang, currentContent.toString()))
+                    val contentStr = currentContent.toString()
+                    val trimmedContent = contentStr.trim()
+                    if (trimmedContent.length >= 10 && trimmedContent !in setOf("pass", "...", "// todo", "# todo", "// write code here", "/* todo */")) {
+                        val finalName = currentFileName ?: fileNameFor(currentLang, lastTextBefore, files.size)
+                        files.add(CodeFile(finalName, currentLang, contentStr))
+                    }
                     inBlock = false
                     currentContent.clear()
                     currentFileName = null

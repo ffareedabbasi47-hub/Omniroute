@@ -321,6 +321,11 @@ fun ChatScreen(
     }
 
     fun saveCodeFile(name: String, content: String) {
+        val trimmed = content.trim()
+        if (trimmed.length < 5 || trimmed in listOf("pass", "...", "// todo", "/* todo */")) {
+            vm.notify("Cannot save empty code block.")
+            return
+        }
         scope.launch {
             try {
                 val file = omni.attachments.writeExport(name, content.toByteArray(Charsets.UTF_8))

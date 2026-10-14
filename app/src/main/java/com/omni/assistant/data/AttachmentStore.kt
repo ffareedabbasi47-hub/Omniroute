@@ -225,11 +225,18 @@ class AttachmentStore(context: Context) {
             file.delete()
             throw AttachException("Couldn't read \"$name\".")
         }
+        if (file.length() == 0L) {
+            file.delete()
+            throw AttachException("\"$name\" is empty (0 bytes).")
+        }
         val isImage = AttachmentRules.isImage(name, mime)
         val storedMime = when {
             isPdf -> "application/pdf"
             isImage -> if (mime.startsWith("image/")) mime else "image/jpeg"
-            else -> mime.ifBlank { "text/plain" }
+            mime.isNotBlank() -> mime
+            name.endsWith(".json", ignoreCase = true) -> "application/json"
+            name.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+            else -> "application/octet-stream"
         }
         val storedKind = if (isImage) "image" else "file"
         val note = if (isPdf) "PDF is sent as a document; not every model accepts this" else null
@@ -394,24 +401,30 @@ class AttachmentStore(context: Context) {
                 )
             }
             else -> {
-                if (a.mime == "application/pdf") {
-                    ApiContribution("", listOf(ApiPart.Document(a.name, dataUrl("application/pdf", File(a.path)))))
+                val file = File(a.path)
+                if (!file.exists() || file.length() == 0L) {
+                    return@withContext ApiContribution("[Attachment ${a.name} is empty or missing]", emptyList())
+                }
+                val storedMime = when {
+                    a.mime.isNotBlank() -> a.mime
+                    a.name.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+                    else -> "application/octet-stream"
+                }
+                val docPart = ApiPart.Document(a.name, dataUrl(storedMime, file))
+
+                val bytes = file.readBytes()
+                val isBinary = bytes.take(1024).any { it == 0.toByte() }
+                if (isBinary || storedMime == "application/pdf" || a.name.endsWith(".pdf", ignoreCase = true)) {
+                    ApiContribution("[Attached file: ${a.name} (${AttachmentRules.formatBytes(file.length())})]", listOf(docPart))
                 } else {
-                    val file = File(a.path)
-                    val bytes = if (file.exists()) file.readBytes() else ByteArray(0)
-                    val isBinary = bytes.take(1024).any { it == 0.toByte() }
-                    if (isBinary) {
-                        ApiContribution("[Binary file: ${a.name} (${bytes.size} bytes)]", emptyList())
-                    } else {
-                        var text = String(bytes, Charsets.UTF_8)
-                        var truncated = false
-                        if (text.length > AttachmentRules.MAX_TEXT_CHARS) {
-                            text = text.take(AttachmentRules.MAX_TEXT_CHARS)
-                            truncated = true
-                        }
-                        val tail = if (truncated) "\n[...truncated to ${AttachmentRules.MAX_TEXT_CHARS} characters]" else ""
-                        ApiContribution("[File: ${a.name}]\n```\n$text\n```$tail", emptyList())
+                    var text = String(bytes, Charsets.UTF_8)
+                    var truncated = false
+                    if (text.length > 50_000) {
+                        text = text.take(50_000)
+                        truncated = true
                     }
+                    val tail = if (truncated) "\n[...preview truncated, complete file attached]" else ""
+                    ApiContribution("[File: ${a.name}]\n```\n$text\n```$tail", listOf(docPart))
                 }
             }
         }
