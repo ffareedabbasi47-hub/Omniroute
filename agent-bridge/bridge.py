@@ -38,6 +38,7 @@ import threading
 import time
 import urllib.request
 import uuid
+import zipfile
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
@@ -311,21 +312,26 @@ class Bridge:
         system_hint = (
             "You are Antigravity AI assistant pair-programming with the user on their Android device. "
             "When the user asks in Hindi or Hinglish, answer in polite, clear Hindi/Hinglish. "
-            "Start with a concise <thinking>...</thinking> block explaining your architectural plan and files to create. "
-            "If the user has attached photos, camera captures, or video frames (file paths given in prompt), you MUST inspect them with view_file to analyze what is in the photo or video and answer accurately. "
-            "If the user has attached files, code, PDFs, or documents (file paths given as file://...), you MUST inspect them with view_file to understand their complete content before answering. "
-            "When the user asks you to create or generate a photo, image, picture, or video (e.g. 'photo banao', 'image banao', 'create picture', 'creat photo', 'video banao', 'vdeo banao', 'vedeo banao'): "
-            "DO NOT write code (NEVER output SVG, HTML, CSS, or canvas code blocks for images or videos). "
-            "Instead, describe the scene and what was created in vivid, beautiful detail in polite Hindi/Hinglish, and inform the user that their high-resolution photo/video is generated and ready to view and download below. "
-            "When the user asks you to create, modify, or fix a game, app, or tool (such as Python, Java, Kotlin, HTML/JS/CSS, etc.), "
-            "provide complete, clean, fully working code. Never truncate or leave placeholders (such as 'pass', '// todo', '...'). "
-            "Always label each code block with its exact filename (e.g. ```html:index.html, ```javascript:game.js, ```css:style.css, ```python:app.py). "
-            "For web games, ensure index.html includes full interactive visuals, sounds, animations, and touch controls so it plays immediately in a mobile browser.\n\n"
+            "Start with a concise <thinking>...</thinking> block explaining your architectural plan and files. "
+            "CRITICAL INSTRUCTIONS FOR USER ATTACHED FILES AND ZIP ARCHIVES: "
+            "1. When the user attaches an existing file (such as index.html, game.js, style.css, app.py) or an unpacked ZIP project archive and asks to make changes, additions, improvements, or bug fixes (e.g. 'isme change kar do', 'score counter lagao', 'button add karo', 'fix this', 'naya level add karo'): "
+            "   - You MUST update the user's EXISTING file(s) with their requested changes. NEVER ignore their existing code. "
+            "   - Retain the exact same filename (e.g. ```html:index.html, ```css:style.css, ```javascript:game.js). NEVER change the filename to a generic name like 'visual_1.html' or create a blank placeholder file. "
+            "   - Output the ENTIRE, COMPLETE, FULLY WORKING code of the modified file with all changes properly integrated into the existing code. NEVER output partial diffs, snippets, placeholders (like '// rest of code here', 'pass', '...'), or empty files! "
+            "   - For web games/apps, make sure index.html remains 100% self-contained and playable with all logic, styles, sounds, and touch controls intact. "
+            "2. When creating new files from scratch, always output complete, clean, working code. Never truncate or leave placeholders. "
+            "3. Always label each code block with its exact filename (e.g. ```html:index.html, ```javascript:game.js, ```css:style.css, ```python:app.py). "
+            "4. When the user asks you to create or generate a photo, image, picture, or video ('photo banao', 'image banao', 'video banao'): "
+            "   DO NOT write code (NEVER output SVG, HTML, CSS, or canvas code blocks for images or videos). Instead, describe the scene in vivid, beautiful detail in polite Hindi/Hinglish.\n\n"
         )
         clean_prompt = str(prompt).replace("\x00", "").strip()
-        # Keep prompt under OS arg limit (MAX_ARG_STRLEN is 128KB in Linux)
-        if len(clean_prompt) > 80_000:
-            clean_prompt = clean_prompt[-80_000:]
+        # Keep prompt under OS arg limit (MAX_ARG_STRLEN is 128KB in Linux; safe budget 110KB)
+        MAX_SAFE_LEN = 110_000
+        total_len = len(system_hint) + len(clean_prompt)
+        if total_len > MAX_SAFE_LEN:
+            allowed_prompt_len = MAX_SAFE_LEN - len(system_hint)
+            # Retain the most recent part of prompt (latest user files and instructions)
+            clean_prompt = clean_prompt[-allowed_prompt_len:]
         full_prompt = (system_hint + clean_prompt).replace("\x00", "").strip()
 
         bins = [bin_to_use]
@@ -864,6 +870,7 @@ class Handler(BaseHTTPRequestHandler):
         os.makedirs(attached_files_dir, exist_ok=True)
         img_counter = 1
         file_counter = 1
+        user_attached_files = []
 
         for m in messages:
             role = m.get("role", "user")
@@ -923,22 +930,85 @@ class Handler(BaseHTTPRequestHandler):
                                 f_out.write(file_bytes)
                             
                             f_size = len(file_bytes)
-                            file_desc = (
-                                f"\n[Attached User File {file_counter}: file://{target_file_path}]\n"
-                                f"Filename: {clean_fname} | Size: {f_size} bytes\n"
-                                f"(Please inspect this file using view_file at '{target_file_path}' to read its complete content and answer accurately)"
-                            )
-                            try:
-                                text_content = file_bytes.decode("utf-8")
-                                ext = clean_fname.rsplit(".", 1)[-1] if "." in clean_fname else "txt"
-                                if len(text_content) <= 25_000:
-                                    file_desc += f"\nFile content:\n```{ext}\n{text_content}\n```"
-                                else:
-                                    file_desc += f"\nFile preview (first 25KB):\n```{ext}\n{text_content[:25000]}\n```\n[...complete {f_size} bytes saved at '{target_file_path}']"
-                            except Exception:
-                                pass
-                            text_pieces.append(file_desc)
-                            file_counter += 1
+                            is_zip = clean_fname.lower().endswith(".zip") or (len(file_bytes) > 4 and file_bytes[:4] == b"PK\x03\x04")
+                            
+                            if is_zip:
+                                extract_base = clean_fname.rsplit(".", 1)[0] if "." in clean_fname else clean_fname
+                                extracted_project_dir = os.path.join(cache_dir, "extracted_projects", f"{file_counter}_{extract_base}")
+                                os.makedirs(extracted_project_dir, exist_ok=True)
+                                try:
+                                    with zipfile.ZipFile(target_file_path, "r") as zf:
+                                        zf.extractall(extracted_project_dir)
+                                    
+                                    extracted_files = []
+                                    for root_dir, _, filenames in os.walk(extracted_project_dir):
+                                        for fn in filenames:
+                                            full_p = os.path.join(root_dir, fn)
+                                            rel_p = os.path.relpath(full_p, extracted_project_dir)
+                                            sz = os.path.getsize(full_p)
+                                            extracted_files.append((rel_p, full_p, sz))
+                                    
+                                    file_desc = (
+                                        f"\n📦 [ATTACHED USER ZIP PROJECT: '{clean_fname}' ({f_size} bytes)]\n"
+                                        f"Project extracted location: file://{extracted_project_dir}\n"
+                                        f"Files found in archive ({len(extracted_files)}):\n"
+                                    )
+                                    for rel_p, _, sz in extracted_files:
+                                        file_desc += f"- {rel_p} ({sz} bytes)\n"
+                                    
+                                    file_desc += (
+                                        f"\nCRITICAL: The user has attached this existing project archive to make changes, additions, or fixes.\n"
+                                        f"Here is the complete source code of the project files:\n"
+                                    )
+                                    for rel_p, full_p, sz in extracted_files:
+                                        ext = rel_p.rsplit(".", 1)[-1].lower() if "." in rel_p else "txt"
+                                        if ext in ("html", "htm", "css", "js", "mjs", "ts", "json", "py", "kt", "java", "txt", "md", "xml", "svg", "yaml", "yml"):
+                                            try:
+                                                with open(full_p, "r", encoding="utf-8", errors="replace") as f_src:
+                                                    file_src = f_src.read()
+                                                if len(file_src) > 40_000:
+                                                    file_src = file_src[:40_000] + "\n[...content continues...]"
+                                                file_desc += f"\n--- File: {rel_p} ---\n```{ext}:{rel_p}\n{file_src}\n```\n"
+                                            except Exception:
+                                                pass
+                                    
+                                    text_pieces.append(file_desc)
+                                    user_attached_files.append({
+                                        "name": clean_fname,
+                                        "base": extract_base,
+                                        "path": target_file_path,
+                                        "is_zip": True,
+                                        "extract_dir": extracted_project_dir,
+                                        "files": [x[0] for x in extracted_files]
+                                    })
+                                    file_counter += 1
+                                except Exception as e:
+                                    text_pieces.append(f"\n[ZIP extraction of '{clean_fname}' failed: {e}]")
+                            else:
+                                text_pieces.append(
+                                    f"\n📄 [ATTACHED USER FILE: '{clean_fname}' ({f_size} bytes)]\n"
+                                    f"File location on device: file://{target_file_path}\n"
+                                )
+                                try:
+                                    text_content = file_bytes.decode("utf-8", errors="replace")
+                                    ext = clean_fname.rsplit(".", 1)[-1].lower() if "." in clean_fname else "txt"
+                                    if len(text_content) > 60_000:
+                                        text_content = text_content[:60_000] + "\n[...preview truncated...]"
+                                    text_pieces.append(
+                                        f"CRITICAL: The user wants to modify or improve this existing file '{clean_fname}'.\n"
+                                        f"Here is the complete current file content:\n"
+                                        f"```{ext}:{clean_fname}\n{text_content}\n```\n"
+                                    )
+                                    user_attached_files.append({
+                                        "name": clean_fname,
+                                        "base": clean_fname.rsplit(".", 1)[0] if "." in clean_fname else clean_fname,
+                                        "path": target_file_path,
+                                        "is_zip": False,
+                                        "ext": ext
+                                    })
+                                except Exception:
+                                    text_pieces.append(f"(Binary file '{clean_fname}', size {f_size} bytes)\n")
+                                file_counter += 1
                         except Exception as e:
                             text_pieces.append(f"\n[File {clean_fname} attached but save failed: {e}]")
                 content = " ".join(text_pieces)
@@ -949,18 +1019,34 @@ class Handler(BaseHTTPRequestHandler):
                     inlined = re.findall(r"\[File:\s*([^\]\n]+)\]\n```[a-zA-Z0-9_\-.:]*\n([\s\S]*?)```", content)
                     for in_name, in_data in inlined:
                         clean_in_name = os.path.basename(in_name.strip())
-                        if clean_in_name:
+                        if clean_in_name and not any(f.get("name") == clean_in_name for f in user_attached_files):
                             in_path = os.path.join(attached_files_dir, f"{file_counter}_{clean_in_name}")
                             with open(in_path, "w", encoding="utf-8") as f_in:
                                 f_in.write(in_data)
                             file_counter += 1
-                            content += f"\n[Full file saved to device at: file://{in_path} - inspect with view_file]\n"
+                            user_attached_files.append({
+                                "name": clean_in_name,
+                                "base": clean_in_name.rsplit(".", 1)[0] if "." in clean_in_name else clean_in_name,
+                                "path": in_path,
+                                "is_zip": False,
+                                "ext": clean_in_name.rsplit(".", 1)[-1].lower() if "." in clean_in_name else "txt"
+                            })
                 except Exception:
                     pass
 
             prompt_parts.append(f"{role}: {content}")
-        # Keep last 15 turns max to avoid OS argument length limits
-        prompt = "\n".join(prompt_parts[-15:]).replace("\x00", "")
+
+        # Build prompt: retain earlier turns as concise context while keeping the latest turn full
+        if len(prompt_parts) > 1:
+            recent_turns = prompt_parts[-10:]
+            last_turn = recent_turns[-1]
+            earlier_turns = recent_turns[:-1]
+            earlier_text = "\n".join(earlier_turns)
+            if len(earlier_text) + len(last_turn) > 85_000:
+                earlier_text = earlier_text[-max(0, 85_000 - len(last_turn)):]
+            prompt = (earlier_text + "\n" + last_turn).strip().replace("\x00", "")
+        else:
+            prompt = "\n".join(prompt_parts).replace("\x00", "")
 
         def _postprocess(text):
             try:
@@ -968,50 +1054,94 @@ class Handler(BaseHTTPRequestHandler):
                 os.makedirs(gen_dir, exist_ok=True)
                 code_pattern = re.compile(r"```([a-zA-Z0-9_\-.:]+)?\n([\s\S]*?)```")
                 matches = code_pattern.findall(text)
+                
+                # Gather all attached filenames for smart matching
+                attached_names = [f["name"] for f in user_attached_files]
+                for f in user_attached_files:
+                    if f.get("is_zip"):
+                        attached_names.extend(f.get("files", []))
+
                 saved_files = []
                 idx = 1
                 for header, code in matches:
                     header = header.strip()
                     code_clean = code.strip()
                     # Do not save empty or tiny placeholder code blocks (prevents 0b and 6b files)
-                    if len(code_clean) < 15 or code_clean in ("pass", "...", "// todo", "# todo", "// write code here", "/* todo */"):
+                    if len(code_clean) < 35 or code_clean in ("pass", "...", "// todo", "# todo", "// write code here", "/* todo */"):
                         continue
                     fname = None
                     if ":" in header:
                         fname = header.split(":", 1)[1].strip()
+                    elif " " in header:
+                        fname = header.split(" ", 1)[1].strip()
                     elif "." in header:
                         fname = header.strip()
-                    elif header in ("svg", "xml") or code_clean.startswith("<svg"):
-                        fname = f"vector_art_{idx}.svg"
+
+                    # Match against user's attached file names if header didn't specify filename
+                    if not fname:
+                        h_lower = header.lower()
+                        for att in attached_names:
+                            att_ext = att.rsplit(".", 1)[-1].lower() if "." in att else ""
+                            if (h_lower in ("html", "htm") and att_ext in ("html", "htm")) or \
+                               (h_lower in ("javascript", "js") and att_ext in ("js", "mjs", "ts")) or \
+                               (h_lower in ("css",) and att_ext == "css") or \
+                               (h_lower in ("python", "py") and att_ext == "py") or \
+                               (h_lower in ("kotlin", "kt") and att_ext in ("kt", "kts")):
+                                fname = att
+                                break
+
+                    # Fallback defaults
+                    if not fname:
+                        if header in ("svg", "xml") or code_clean.startswith("<svg"):
+                            fname = f"vector_art_{idx}.svg"
+                        elif header == "html" or "<!DOCTYPE" in code or "<html" in code:
+                            fname = "index.html"
+                        elif header in ("python", "py"):
+                            fname = f"script_{idx}.py"
+                        elif header in ("kotlin", "kt"):
+                            fname = f"code_{idx}.kt"
+                        elif header in ("javascript", "js"):
+                            fname = f"script_{idx}.js"
+                        elif header in ("css",):
+                            fname = f"style_{idx}.css"
                         idx += 1
-                    elif header == "html" or "<!DOCTYPE" in code or "<html" in code:
-                        fname = f"visual_{idx}.html"
-                        idx += 1
-                    elif header in ("python", "py"):
-                        fname = f"script_{idx}.py"
-                        idx += 1
-                    elif header in ("kotlin", "kt"):
-                        fname = f"code_{idx}.kt"
-                        idx += 1
-                    elif header in ("javascript", "js"):
-                        fname = f"script_{idx}.js"
-                        idx += 1
-                    elif header in ("java",):
-                        fname = f"code_{idx}.java"
-                        idx += 1
+
                     if fname:
                         fname = os.path.basename(fname)
                         fpath = os.path.join(gen_dir, fname)
                         with open(fpath, "w", encoding="utf-8") as f:
                             f.write(code)
-                        # Verify the file was written and is not 0 bytes
-                        if os.path.isfile(fpath) and os.path.getsize(fpath) >= 15:
+                        # Verify the file was written and is not 0 bytes or placeholder
+                        if os.path.isfile(fpath) and os.path.getsize(fpath) >= 35:
                             saved_files.append(fname)
                         else:
                             try:
                                 os.remove(fpath)
                             except Exception:
                                 pass
+
+                # If the user attached a ZIP project, package updated files back into an updated ZIP!
+                for f in user_attached_files:
+                    if f.get("is_zip"):
+                        zip_base = f.get("base", "project")
+                        updated_zip_name = f"{zip_base}_updated.zip"
+                        updated_zip_path = os.path.join(gen_dir, updated_zip_name)
+                        extract_d = f.get("extract_dir")
+                        if extract_d and os.path.isdir(extract_d):
+                            for sf in saved_files:
+                                sf_src = os.path.join(gen_dir, sf)
+                                sf_dest = os.path.join(extract_d, sf)
+                                if os.path.isfile(sf_src):
+                                    shutil.copy2(sf_src, sf_dest)
+                            with zipfile.ZipFile(updated_zip_path, "w", zipfile.ZIP_DEFLATED) as new_zf:
+                                for root_dir, _, filenames in os.walk(extract_d):
+                                    for fn in filenames:
+                                        full_p = os.path.join(root_dir, fn)
+                                        rel_p = os.path.relpath(full_p, extract_d)
+                                        new_zf.write(full_p, rel_p)
+                            if os.path.isfile(updated_zip_path) and os.path.getsize(updated_zip_path) > 100:
+                                text += f"\n\n📦 **Updated Project Archive Ready:**\n\n[⬇ Download {updated_zip_name}](http://127.0.0.1:8787/generated/{updated_zip_name})"
+
                 if saved_files:
                     text += "\n\n📁 **Files saved to device:** " + ", ".join(f"`~/OmniAssistant/generated/{f}`" for f in saved_files)
 

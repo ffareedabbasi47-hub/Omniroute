@@ -413,14 +413,29 @@ class AttachmentStore(context: Context) {
                 val docPart = ApiPart.Document(a.name, dataUrl(storedMime, file))
 
                 val bytes = file.readBytes()
+                val isZip = a.name.endsWith(".zip", ignoreCase = true) || storedMime == "application/zip"
                 val isBinary = bytes.take(1024).any { it == 0.toByte() }
-                if (isBinary || storedMime == "application/pdf" || a.name.endsWith(".pdf", ignoreCase = true)) {
+                if (isZip) {
+                    val zipEntries = try {
+                        java.util.zip.ZipFile(file).use { zf ->
+                            zf.entries().asSequence()
+                                .filter { !it.isDirectory }
+                                .map { "${it.name} (${AttachmentRules.formatBytes(it.size)})" }
+                                .take(30)
+                                .toList()
+                        }
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                    val entryList = if (zipEntries.isNotEmpty()) "\nFiles inside archive:\n" + zipEntries.joinToString("\n") { "• $it" } else ""
+                    ApiContribution("[Attached ZIP Project: ${a.name} (${AttachmentRules.formatBytes(file.length())})]$entryList", listOf(docPart))
+                } else if (isBinary || storedMime == "application/pdf" || a.name.endsWith(".pdf", ignoreCase = true)) {
                     ApiContribution("[Attached file: ${a.name} (${AttachmentRules.formatBytes(file.length())})]", listOf(docPart))
                 } else {
                     var text = String(bytes, Charsets.UTF_8)
                     var truncated = false
-                    if (text.length > 50_000) {
-                        text = text.take(50_000)
+                    if (text.length > AttachmentRules.MAX_TEXT_CHARS) {
+                        text = text.take(AttachmentRules.MAX_TEXT_CHARS)
                         truncated = true
                     }
                     val tail = if (truncated) "\n[...preview truncated, complete file attached]" else ""
